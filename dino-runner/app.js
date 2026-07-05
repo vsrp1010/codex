@@ -21,8 +21,12 @@ const world = {
   height: 360,
   groundY: 286,
   gravity: 0.48,
+  holdGravity: 0.34,
+  releaseGravity: 0.9,
   fastFallGravity: 0.78,
   jumpVelocity: -16.2,
+  jumpCutVelocity: -6.6,
+  maxJumpHoldMs: 190,
   baseSpeed: 5.6,
 };
 
@@ -38,7 +42,7 @@ const state = {
   obstacles: [],
   clouds: [],
   dust: [],
-  keys: { duck: false },
+  keys: { duck: false, jump: false },
 };
 
 const dino = {
@@ -50,6 +54,7 @@ const dino = {
   velocityY: 0,
   grounded: true,
   ducking: false,
+  jumpHeldMs: 0,
   step: 0,
 };
 
@@ -68,6 +73,9 @@ function resetGame(startRunning = false) {
   dino.velocityY = 0;
   dino.grounded = true;
   dino.ducking = false;
+  dino.jumpHeldMs = 0;
+  state.keys.jump = false;
+  state.keys.duck = false;
   updateScore();
   if (startRunning) {
     hideOverlay();
@@ -89,16 +97,25 @@ function startGame() {
   }
 }
 
-function jump() {
+function startJump() {
   if (state.mode !== "running") {
     startGame();
-    return;
   }
+  state.keys.jump = true;
+  if (state.mode !== "running") return;
   if (!dino.grounded) return;
   dino.velocityY = world.jumpVelocity;
   dino.grounded = false;
   dino.ducking = false;
+  dino.jumpHeldMs = 0;
   addDust(8);
+}
+
+function endJump() {
+  state.keys.jump = false;
+  if (dino.velocityY < world.jumpCutVelocity) {
+    dino.velocityY = world.jumpCutVelocity;
+  }
 }
 
 function setDuck(ducking) {
@@ -126,7 +143,11 @@ function update(delta) {
   state.score += delta * 0.012 * (state.speed / world.baseSpeed);
   dino.step += delta * 0.013;
 
-  const gravity = state.keys.duck && !dino.grounded ? world.fastFallGravity : world.gravity;
+  if (!dino.grounded && state.keys.jump && dino.velocityY < 0) {
+    dino.jumpHeldMs += delta;
+  }
+  const holdingJump = state.keys.jump && dino.velocityY < 0 && dino.jumpHeldMs < world.maxJumpHoldMs;
+  const gravity = getGravity(holdingJump);
   dino.velocityY += gravity * frameStep;
   dino.y += dino.velocityY * frameStep;
   const targetHeight = dino.ducking ? dino.duckHeight : dino.height;
@@ -136,6 +157,7 @@ function update(delta) {
     dino.velocityY = 0;
     dino.grounded = true;
     dino.ducking = state.keys.duck;
+    dino.jumpHeldMs = 0;
   } else {
     dino.grounded = false;
     dino.ducking = false;
@@ -154,6 +176,13 @@ function update(delta) {
   moveWorldItems(delta);
   checkCollisions();
   updateScore();
+}
+
+function getGravity(holdingJump) {
+  if (state.keys.duck && !dino.grounded) return world.fastFallGravity;
+  if (holdingJump) return world.holdGravity;
+  if (!state.keys.jump && dino.velocityY < 0) return world.releaseGravity;
+  return world.gravity;
 }
 
 function spawnObstacle() {
@@ -455,7 +484,7 @@ function loop(now) {
 window.addEventListener("keydown", (event) => {
   if (event.code === "Space" || event.code === "ArrowUp") {
     event.preventDefault();
-    jump();
+    if (!event.repeat) startJump();
   }
   if (event.code === "ArrowDown") {
     event.preventDefault();
@@ -467,6 +496,9 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (event.code === "Space" || event.code === "ArrowUp") {
+    endJump();
+  }
   if (event.code === "ArrowDown") {
     setDuck(false);
   }
@@ -475,11 +507,24 @@ window.addEventListener("keyup", (event) => {
 refs.startBtn.addEventListener("click", startGame);
 refs.restartBtn.addEventListener("click", () => resetGame(true));
 refs.pauseBtn.addEventListener("click", togglePause);
-refs.jumpBtn.addEventListener("click", jump);
+refs.jumpBtn.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  startJump();
+});
+refs.jumpBtn.addEventListener("pointerup", endJump);
+refs.jumpBtn.addEventListener("pointerleave", endJump);
+refs.jumpBtn.addEventListener("pointercancel", endJump);
 refs.duckBtn.addEventListener("pointerdown", () => setDuck(true));
 refs.duckBtn.addEventListener("pointerup", () => setDuck(false));
 refs.duckBtn.addEventListener("pointerleave", () => setDuck(false));
-canvas.addEventListener("pointerdown", jump);
+refs.duckBtn.addEventListener("pointercancel", () => setDuck(false));
+canvas.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  startJump();
+});
+canvas.addEventListener("pointerup", endJump);
+canvas.addEventListener("pointerleave", endJump);
+canvas.addEventListener("pointercancel", endJump);
 
 resetGame(false);
 requestAnimationFrame(loop);
