@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dino Runner</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Browser arcade</p>
+          <h1>Dino Runner</h1>
+        </div>
+        <div class="scoreboard" aria-live="polite">
+          <div>
+            <span>Score</span>
+            <strong id="score">00000</strong>
+          </div>
+          <div>
+            <span>Best</span>
+            <strong id="bestScore">00000</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="game-panel" aria-label="Dino runner game">
+        <canvas id="gameCanvas" width="960" height="360"></canvas>
+        <div id="overlay" class="overlay">
+          <div class="overlay-card">
+            <p id="overlayKicker">Ready</p>
+            <h2 id="overlayTitle">Press Space to Run</h2>
+            <p id="overlayText">Jump over cacti. Duck under birds.</p>
+            <button id="startBtn" type="button">Start Game</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls" aria-label="Game controls">
+        <button id="jumpBtn" type="button">Jump</button>
+        <button id="duckBtn" type="button">Duck</button>
+        <button id="pauseBtn" type="button" class="ghost">Pause</button>
+        <button id="restartBtn" type="button" class="ghost">Restart</button>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

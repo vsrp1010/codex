@@ -6,3 +6,4 @@ A collection of interactive web applications.
 
 - **[Connect 4](https://vsrp1010.github.io/codex/connect-4/)** - Classic two-player connection game
 - **[Creature Simulator](https://vsrp1010.github.io/codex/creature-sim/)** - Interactive creature simulation
+- **[Dino Runner](https://vsrp1010.github.io/codex/dino-runner/)** - Side-scrolling jump-and-duck arcade runner
