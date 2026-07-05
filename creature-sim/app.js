@@ -1,4 +1,5 @@
 const CONDITION_OPTIONS = [
+  { value: "always", label: "Always" },
   { value: "lowEnergy", label: "Energy is low" },
   { value: "highEnergy", label: "Energy is high" },
   { value: "nearFood", label: "Food is nearby" },
@@ -114,6 +115,8 @@ const EAT_PARTICLE_MAP = {
   eatBrown: "emitBrown",
 };
 
+const SIGNAL_COLOR_NAMES = Object.keys(SIGNAL_COLORS).map((key) => key.replace("emit", ""));
+
 const state = {
   genome: createDefaultGenome(),
   catalog: [],
@@ -134,6 +137,8 @@ const state = {
   possession: {
     creatureId: null,
     keys: { up: false, down: false, left: false, right: false },
+    actions: { emit: false, eat: false },
+    color: "Red",
   },
 };
 
@@ -150,6 +155,7 @@ const refs = {
   lifespan: document.getElementById("lifespan"),
   needsFood: document.getElementById("needsFood"),
   immortalIfAlone: document.getElementById("immortalIfAlone"),
+  immortal: document.getElementById("immortal"),
   bodyHuePreview: document.getElementById("bodyHuePreview"),
   sizePreview: document.getElementById("sizePreview"),
   speedLabel: document.getElementById("speedLabel"),
@@ -161,6 +167,7 @@ const refs = {
   lifespanPreview: document.getElementById("lifespanPreview"),
   needsFoodPreview: document.getElementById("needsFoodPreview"),
   immortalIfAlonePreview: document.getElementById("immortalIfAlonePreview"),
+  immortalPreview: document.getElementById("immortalPreview"),
   trailHuePreview: document.getElementById("trailHuePreview"),
   rulesList: document.getElementById("rulesList"),
   addRuleBtn: document.getElementById("addRuleBtn"),
@@ -182,6 +189,9 @@ const refs = {
   resetDishBtn: document.getElementById("resetDishBtn"),
   releaseBtn: document.getElementById("releaseBtn"),
   possessBtn: document.getElementById("possessBtn"),
+  possessColorSelect: document.getElementById("possessColorSelect"),
+  possessReleaseBtn: document.getElementById("possessReleaseBtn"),
+  possessEatBtn: document.getElementById("possessEatBtn"),
   pauseBtn: document.getElementById("pauseBtn"),
   exportSetupBtn: document.getElementById("exportSetupBtn"),
   importSetupBtn: document.getElementById("importSetupBtn"),
@@ -226,6 +236,7 @@ function createDefaultGenome() {
     lifespan: 5000,
     needsFood: true,
     immortalIfAlone: false,
+    immortal: false,
     rules: DEFAULT_RULES.map((rule) => ({ ...rule })),
   };
 }
@@ -338,6 +349,11 @@ function bindEvents() {
     }
     possessCreature(catalogCreature.genome);
   });
+  refs.possessColorSelect.addEventListener("change", (event) => {
+    state.possession.color = sanitizeSignalColor(event.target.value);
+  });
+  refs.possessReleaseBtn.addEventListener("click", () => triggerPossessedSignalAction("emit"));
+  refs.possessEatBtn.addEventListener("click", () => triggerPossessedSignalAction("eat"));
   refs.pauseBtn.addEventListener("click", togglePause);
   refs.exportSetupBtn.addEventListener("click", exportSetup);
   refs.importSetupBtn.addEventListener("click", () => refs.importSetupInput.click());
@@ -369,6 +385,7 @@ function bindEvents() {
     refs.lifespan,
     refs.needsFood,
     refs.immortalIfAlone,
+    refs.immortal,
     refs.trailHue,
     refs.speciesName,
   ].forEach((input) => input.addEventListener("input", updateAttributePreviews));
@@ -386,6 +403,7 @@ function bindEvents() {
     refs.lifespan,
     refs.needsFood,
     refs.immortalIfAlone,
+    refs.immortal,
   ].forEach((input) =>
     input.addEventListener("change", () => {
       readControlsIntoGenome();
@@ -433,7 +451,7 @@ function renderRuleEditor() {
     ifBlock.className = "script-block";
     const ifTitle = document.createElement("div");
     ifTitle.className = "script-title";
-    ifTitle.textContent = "If all of these are true";
+    ifTitle.textContent = "If ANY of these are true";
     ifBlock.appendChild(ifTitle);
 
     rule.conditions.forEach((condition, conditionIndex) => {
@@ -489,24 +507,41 @@ function renderRuleEditor() {
       row.className = "script-row script-row-wide";
 
       const actionSelect = document.createElement("select");
-      ACTION_OPTIONS.forEach((option) => {
-        actionSelect.appendChild(createOption(option.value, option.label, actionRule.action));
+      buildActionOptions(state.genome.rules.length).forEach((option) => {
+        actionSelect.appendChild(createOption(option.value, option.label, getActionSelectValue(actionRule)));
       });
       actionSelect.addEventListener("change", (event) => {
-        state.genome.rules[index].actions[actionIndex].action = event.target.value;
+        const parsed = parseActionSelectValue(event.target.value, state.genome.rules.length);
+        state.genome.rules[index].actions[actionIndex].action = parsed.action;
+        state.genome.rules[index].actions[actionIndex].stopTarget = parsed.stopTarget;
+        if (parsed.action === "stopScript") {
+          state.genome.rules[index].actions[actionIndex].intensity = "medium";
+        }
+        renderRuleEditor();
         refreshGenomeJson();
         pushHistorySnapshot();
       });
 
-      const intensitySelect = document.createElement("select");
-      INTENSITY_OPTIONS.forEach((option) => {
-        intensitySelect.appendChild(createOption(option.value, option.label, actionRule.intensity || "medium"));
-      });
-      intensitySelect.addEventListener("change", (event) => {
-        state.genome.rules[index].actions[actionIndex].intensity = event.target.value;
-        refreshGenomeJson();
-        pushHistorySnapshot();
-      });
+      const detailSelect = document.createElement("select");
+      if (actionRule.action === "stopScript") {
+        detailSelect.appendChild(
+          createOption(
+            "",
+            `Stops script ${clamp(Number(actionRule.stopTarget), 1, state.genome.rules.length, 1)}`,
+            ""
+          )
+        );
+        detailSelect.disabled = true;
+      } else {
+        INTENSITY_OPTIONS.forEach((option) => {
+          detailSelect.appendChild(createOption(option.value, option.label, actionRule.intensity || "medium"));
+        });
+        detailSelect.addEventListener("change", (event) => {
+          state.genome.rules[index].actions[actionIndex].intensity = event.target.value;
+          refreshGenomeJson();
+          pushHistorySnapshot();
+        });
+      }
 
       const removeActionBtn = document.createElement("button");
       removeActionBtn.type = "button";
@@ -520,7 +555,7 @@ function renderRuleEditor() {
         pushHistorySnapshot();
       });
 
-      row.append(actionSelect, intensitySelect, removeActionBtn);
+      row.append(actionSelect, detailSelect, removeActionBtn);
       thenBlock.appendChild(row);
     });
 
@@ -561,6 +596,33 @@ function createOption(value, label, selectedValue) {
   return option;
 }
 
+function buildActionOptions(scriptCount) {
+  return [
+    ...ACTION_OPTIONS,
+    ...Array.from({ length: scriptCount }, (_, index) => ({
+      value: `stopScript:${index + 1}`,
+      label: `Stop script ${index + 1}`,
+    })),
+  ];
+}
+
+function parseActionSelectValue(value, scriptCount) {
+  if (value.startsWith("stopScript:")) {
+    return {
+      action: "stopScript",
+      stopTarget: clamp(Number(value.split(":")[1]), 1, scriptCount, 1),
+    };
+  }
+  return { action: value, stopTarget: undefined };
+}
+
+function getActionSelectValue(actionRule) {
+  if (actionRule.action === "stopScript") {
+    return `stopScript:${clamp(Number(actionRule.stopTarget), 1, 6, 1)}`;
+  }
+  return actionRule.action;
+}
+
 function readControlsIntoGenome() {
   state.genome = {
     ...state.genome,
@@ -576,6 +638,7 @@ function readControlsIntoGenome() {
     lifespan: Number(refs.lifespan.value),
     needsFood: refs.needsFood.checked,
     immortalIfAlone: refs.immortalIfAlone.checked,
+    immortal: refs.immortal.checked,
   };
 }
 
@@ -592,6 +655,7 @@ function syncGenomeToControls() {
   refs.lifespan.value = state.genome.lifespan;
   refs.needsFood.checked = state.genome.needsFood;
   refs.immortalIfAlone.checked = state.genome.immortalIfAlone;
+  refs.immortal.checked = state.genome.immortal;
   updateAttributePreviews();
 }
 
@@ -613,6 +677,7 @@ function updateAttributePreviews() {
   const lifespan = Number(refs.lifespan.value);
   const needsFood = refs.needsFood.checked;
   const immortalIfAlone = refs.immortalIfAlone.checked;
+  const immortal = refs.immortal.checked;
 
   refs.bodyHuePreview.style.background = `hsl(${hue}, 72%, 52%)`;
   refs.trailHuePreview.style.background = `hsl(${trailHue}, 76%, 58%)`;
@@ -625,6 +690,7 @@ function updateAttributePreviews() {
   refs.lifespanPreview.textContent = `${lifespan}`;
   refs.needsFoodPreview.textContent = needsFood ? "Yes" : "No";
   refs.immortalIfAlonePreview.textContent = immortalIfAlone ? "Yes" : "No";
+  refs.immortalPreview.textContent = immortal ? "Yes" : "No";
   refs.speedPreviewDot.dataset.speed = String(speed);
 }
 
@@ -667,6 +733,7 @@ function sanitizeGenome(input) {
     needsFood: typeof input.needsFood === "boolean" ? input.needsFood : safe.needsFood,
     immortalIfAlone:
       typeof input.immortalIfAlone === "boolean" ? input.immortalIfAlone : safe.immortalIfAlone,
+    immortal: typeof input.immortal === "boolean" ? input.immortal : safe.immortal,
     rules: rules.slice(0, 6).map(sanitizeScriptRule),
   };
 }
@@ -690,12 +757,26 @@ function sanitizeScriptRule(rule) {
     conditions: conditionsSource.slice(0, 4).map((condition) =>
       CONDITION_OPTIONS.some((item) => item.value === condition) ? condition : "nearFood"
     ),
-    actions: actionsSource.slice(0, 5).map((actionRule) => ({
-      action: ACTION_OPTIONS.some((item) => item.value === actionRule.action) ? actionRule.action : "emitRed",
-      intensity: INTENSITY_OPTIONS.some((item) => item.value === actionRule.intensity)
-        ? actionRule.intensity
-        : "medium",
-    })),
+    actions: actionsSource.slice(0, 5).map((actionRule) => {
+      const parsed = parseActionSelectValue(String(actionRule.action || "emitRed"), 6);
+      const action =
+        ACTION_OPTIONS.some((item) => item.value === parsed.action) || parsed.action === "stopScript"
+          ? parsed.action
+          : "emitRed";
+      return {
+        action,
+        intensity:
+          action === "stopScript"
+            ? "medium"
+            : INTENSITY_OPTIONS.some((item) => item.value === actionRule.intensity)
+              ? actionRule.intensity
+              : "medium",
+        stopTarget:
+          action === "stopScript"
+            ? clamp(Number(actionRule.stopTarget ?? parsed.stopTarget), 1, 6, 1)
+            : undefined,
+      };
+    }),
   };
 }
 
@@ -715,6 +796,7 @@ function randomGenome() {
     lifespan: randomInt(800, 14000),
     needsFood: Math.random() > 0.2,
     immortalIfAlone: Math.random() > 0.65,
+    immortal: Math.random() > 0.88,
     rules: shuffledConditions.map((condition, index) => ({
       conditions: [condition],
       actions: [
@@ -754,6 +836,7 @@ function resetEnvironment(environment) {
   if (environment.name === "world") {
     state.possession.creatureId = null;
     state.possession.keys = { up: false, down: false, left: false, right: false };
+    state.possession.actions = { emit: false, eat: false };
   }
   renderSelectedCreature();
 }
@@ -822,7 +905,7 @@ function spawnFood(environment, amount) {
       y: randomFloat(18, environment.height - 18),
       size: randomFloat(3, 6),
       energy: randomFloat(18, 38),
-      hue: randomFloat(70, 145),
+      hue: randomFloat(112, 132),
     });
   }
 }
@@ -901,7 +984,7 @@ function updateEnvironment(environment, dt) {
 
   resolveTouches(environment);
   environment.creatures = environment.creatures.filter((creature) => {
-    const immortal = creature.genome.immortalIfAlone;
+    const immortal = creature.genome.immortal || creature.genome.immortalIfAlone;
     const alive = immortal || (creature.energy > 0 && creature.age < creature.genome.lifespan);
     if (!alive) {
       if (creature.id === state.possession.creatureId) {
@@ -968,6 +1051,7 @@ function senseEnvironment(environment, creature) {
   });
 
   return {
+    always: true,
     nearestFood,
     nearestFoodDistance,
     nearFood: nearestFoodDistance < creature.genome.vision,
@@ -995,10 +1079,27 @@ function senseEnvironment(environment, creature) {
 
 function resolveActions(creature, sensory) {
   const actions = [];
-  for (const script of creature.genome.rules) {
-    const matches = script.conditions.every((condition) => sensory[condition]);
+  const stoppedScripts = new Set();
+  for (const [scriptIndex, script] of creature.genome.rules.entries()) {
+    if (stoppedScripts.has(scriptIndex + 1)) {
+      continue;
+    }
+    const matches = script.conditions.some((condition) => sensory[condition]);
     if (matches) {
-      actions.push(...script.actions);
+      for (const actionRule of script.actions) {
+        if (actionRule.action === "stopScript") {
+          const stopTarget = clamp(Number(actionRule.stopTarget), 1, creature.genome.rules.length, 1);
+          if (stopTarget > scriptIndex + 1) {
+            stoppedScripts.add(stopTarget);
+            continue;
+          }
+          if (stopTarget === scriptIndex + 1) {
+            break;
+          }
+          continue;
+        }
+        actions.push(actionRule);
+      }
     }
   }
   if (actions.length === 0) {
@@ -1094,7 +1195,7 @@ function applyAction(creature, sensory, resolvedRule, dt, newborns, environment)
       break;
     case "kill": {
       const target = findKillTarget(environment, creature);
-      if (target) {
+      if (target && !target.genome.immortal) {
         target.energy = 0;
         pulse(creature, 0);
         burst(environment, target.x, target.y, 0, 10, 0.9);
@@ -1278,10 +1379,12 @@ function drawBackdrop(ctx, width, height, name) {
 
 function drawFood(ctx, food) {
   food.forEach((item) => {
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.arc(item.x, item.y, item.size, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(Math.PI * 0.25);
+    ctx.fillStyle = `hsla(${item.hue}, 72%, 44%, 0.95)`;
+    ctx.fillRect(-item.size, -item.size, item.size * 2, item.size * 2);
+    ctx.restore();
   });
 }
 
@@ -1398,6 +1501,7 @@ function togglePause() {
 }
 
 function handleGlobalKeydown(event) {
+  if (state.possession.creatureId) return;
   if (event.key === "p" || event.key === "P") {
     togglePause();
     event.preventDefault();
@@ -1791,6 +1895,8 @@ function toggleWorldFullscreen() {
 function possessCreature(genome) {
   const safeGenome = sanitizeGenome(genome);
   state.possession.keys = { up: false, down: false, left: false, right: false };
+  state.possession.actions = { emit: false, eat: false };
+  state.possession.color = sanitizeSignalColor(refs.possessColorSelect.value);
   if (state.possession.creatureId) {
     const previous = state.world.creatures.find((creature) => creature.id === state.possession.creatureId);
     if (previous) previous.isPossessed = false;
@@ -1812,22 +1918,34 @@ function possessCreature(genome) {
 
 function getPossessedActions(creature) {
   const { up, down, left, right } = state.possession.keys;
+  const { emit, eat } = state.possession.actions;
   const dx = (right ? 1 : 0) - (left ? 1 : 0);
   const dy = (down ? 1 : 0) - (up ? 1 : 0);
+  const actions = [];
 
-  if (dx === 0 && dy === 0) {
-    return [{ action: "rest", intensity: "high" }];
+  if (dx !== 0 || dy !== 0) {
+    const steerTarget = {
+      x: creature.x - dx,
+      y: creature.y - dy,
+    };
+
+    actions.push(
+      { action: "flee", intensity: "extreme", overrideTarget: steerTarget },
+      { action: "speedUp", intensity: "high" }
+    );
+  } else {
+    actions.push({ action: "rest", intensity: "high" });
   }
 
-  const steerTarget = {
-    x: creature.x - dx,
-    y: creature.y - dy,
-  };
+  if (emit) {
+    actions.push({ action: getPossessionActionKey("emit"), intensity: "high" });
+  }
 
-  return [
-    { action: "flee", intensity: "extreme", overrideTarget: steerTarget },
-    { action: "speedUp", intensity: "high" },
-  ];
+  if (eat) {
+    actions.push({ action: getPossessionActionKey("eat"), intensity: "high" });
+  }
+
+  return actions;
 }
 
 function handlePossessionKeyChange(event) {
@@ -1858,8 +1976,45 @@ function handlePossessionKeyChange(event) {
       state.possession.keys.right = isDown;
       event.preventDefault();
       break;
+    case "o":
+    case "O":
+      state.possession.actions.emit = isDown;
+      event.preventDefault();
+      break;
+    case "p":
+    case "P":
+      state.possession.actions.eat = isDown;
+      event.preventDefault();
+      break;
     default:
       break;
+  }
+}
+
+function sanitizeSignalColor(value) {
+  return SIGNAL_COLOR_NAMES.includes(value) ? value : "Red";
+}
+
+function getPossessionActionKey(type, color = state.possession.color) {
+  const safeColor = sanitizeSignalColor(color);
+  return `${type}${safeColor}`;
+}
+
+function triggerPossessedSignalAction(type) {
+  const creature = getCreatureById("world", state.possession.creatureId);
+  if (!creature) return;
+
+  if (type === "emit") {
+    emitSignalParticle(state.world, creature, getPossessionActionKey("emit"), getIntensityFactor("high"));
+    creature.action = `manual ${state.possession.color.toLowerCase()} release`;
+    pulse(creature, SIGNAL_COLORS[getPossessionActionKey("emit")].h);
+  } else if (type === "eat") {
+    eatSignalParticles(state.world, creature, getPossessionActionKey("eat"), getIntensityFactor("high"));
+    creature.action = `manual ${state.possession.color.toLowerCase()} eat`;
+  }
+
+  if (state.selectedCreature?.environment === "world" && state.selectedCreature.id === creature.id) {
+    renderSelectedCreature();
   }
 }
 

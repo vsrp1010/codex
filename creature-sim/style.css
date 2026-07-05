@@ -468,6 +468,24 @@ input[type="range"] {
   margin-top: 0;
 }
 
+.possession-controls {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(24, 49, 40, 0.1);
+  background: rgba(255, 255, 255, 0.56);
+  display: grid;
+  gap: 10px;
+}
+
+.possession-field {
+  max-width: 220px;
+}
+
+.possession-actions {
+  margin-top: 0;
+}
+
 .sim-canvas {
   width: 100%;
   aspect-ratio: 26 / 18;
@@ -511,15 +529,14 @@ input[type="range"] {
 
 body.world-fullscreen .stats-panel {
   position: fixed;
-  left: 18px;
   right: 18px;
   bottom: 18px;
   z-index: 110;
-  width: auto;
-  max-height: none;
-  overflow: visible;
+  width: min(420px, calc(100vw - 36px));
+  max-height: min(42vh, 360px);
+  overflow: auto;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) minmax(280px, 0.9fr);
+  grid-template-columns: 1fr;
   gap: 12px;
   align-items: stretch;
   padding: 14px 16px;
@@ -552,7 +569,7 @@ body.world-fullscreen .world-footer {
   gap: 18px;
   align-items: start;
   padding-right: 0;
-  padding-bottom: 120px;
+  padding-bottom: 0;
 }
 
 body.world-fullscreen .world-controls-row {
@@ -603,7 +620,7 @@ body[data-theme="dark"] .sim-panel.is-fullscreen {
 }
 
 body.world-fullscreen .stats-grid {
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 body.world-fullscreen .stats-panel .panel-heading,
@@ -634,6 +651,7 @@ body.world-fullscreen .stat-value {
 }
 
 body.world-fullscreen .selected-card {
+  margin-top: 0;
   padding: 12px 14px;
 }
 
@@ -673,15 +691,11 @@ body.world-fullscreen .selected-card h3 {
   }
 
   body.world-fullscreen .stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   body.world-fullscreen .stats-panel {
     grid-template-columns: 1fr;
-  }
-
-  body.world-fullscreen .world-footer {
-    padding-bottom: 220px;
   }
 }
 
