@@ -54,14 +54,153 @@
             <input id="disableSideWarpToggle" type="checkbox" />
             <span>Disable side warp</span>
           </label>
+          <label class="toggle-row">
+            <input id="useMatrixToggle" type="checkbox" />
+            <span>Use Matrix</span>
+          </label>
+          <label class="toggle-row">
+            <input id="randomRunToggle" type="checkbox" />
+            <span>Random Run</span>
+          </label>
+          <div class="actions-row">
+            <button id="randomiseBtn" class="button ghost" type="button">Randomise</button>
+          </div>
+          <div class="matrix-wrap" aria-label="Particle color matrix">
+            <table class="particle-matrix">
+              <thead>
+                <tr>
+                  <th scope="col"></th>
+                  <th scope="col"><span class="color-dot red" aria-label="Red"></span></th>
+                  <th scope="col"><span class="color-dot orange" aria-label="Orange"></span></th>
+                  <th scope="col"><span class="color-dot yellow" aria-label="Yellow"></span></th>
+                  <th scope="col"><span class="color-dot green" aria-label="Green"></span></th>
+                  <th scope="col"><span class="color-dot blue" aria-label="Blue"></span></th>
+                  <th scope="col"><span class="color-dot purple" aria-label="Purple"></span></th>
+                  <th scope="col"><span class="color-dot pink" aria-label="Pink"></span></th>
+                  <th scope="col"><span class="color-dot brown" aria-label="Brown"></span></th>
+                  <th scope="col"><span class="color-dot white" aria-label="White"></span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row"><span class="color-dot red" aria-label="Red"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot orange" aria-label="Orange"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot yellow" aria-label="Yellow"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot green" aria-label="Green"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot blue" aria-label="Blue"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot purple" aria-label="Purple"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot pink" aria-label="Pink"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot brown" aria-label="Brown"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+                <tr>
+                  <th scope="row"><span class="color-dot white" aria-label="White"></span></th>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                  <td><input class="matrix-input" type="number" min="-1" max="1" step="0.1" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <div class="surround-limits">
             <label>
               Max per particle
-              <input id="maxSurroundPerParticleInput" type="number" min="0" max="1400" step="1" value="0" />
+              <input id="maxSurroundPerParticleInput" type="number" min="0" max="50000" step="1" value="0" />
             </label>
             <label>
               Max per group
-              <input id="maxSurroundPerGroupInput" type="number" min="0" max="1400" step="1" value="0" />
+              <input id="maxSurroundPerGroupInput" type="number" min="0" max="50000" step="1" value="0" />
             </label>
           </div>
 
@@ -73,6 +212,10 @@
               </div>
               <button id="addScriptBtn" class="button ghost" type="button">Add script</button>
             </div>
+            <p id="matrixActiveNotice" class="microcopy" hidden>
+              Movement scripts are inactive while <strong>Use Matrix</strong> is checked — the
+              matrix now drives all particle movement.
+            </p>
             <div id="scriptsList" class="rules-list"></div>
           </div>
 
@@ -139,7 +282,7 @@
             </div>
             <div class="stat-card">
               <span class="stat-label">World size</span>
-              <strong class="stat-value">100 x 100</strong>
+              <strong class="stat-value">400 x 400</strong>
             </div>
           </div>
           <div class="selected-card">

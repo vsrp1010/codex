@@ -1,6 +1,6 @@
-const WORLD_SIZE = 100;
+const WORLD_SIZE = 400;
 const PARTICLE_RADIUS = 0.9;
-const SIMULATION_SPEED = 0.7;
+const SIMULATION_SPEED = 0.5;
 const INTERACTION_RANGE = 52;
 const CLOSE_REPULSION_RANGE = PARTICLE_RADIUS * 3.6;
 const GLOBAL_FRICTION = 0.975;
@@ -10,7 +10,7 @@ const SURROUND_FORCE = 2.6;
 const EAT_FORCE = 4.1;
 const EAT_RADIUS = 2.1;
 const CONDITION_NEAR_RANGE = 12;
-const MAX_PARTICLES = 1400;
+const MAX_PARTICLES = 50000;
 const SURROUND_RADIUS = 7.5;
 const MULTI_SURROUND_GROUP_RANGE = INTERACTION_RANGE;
 const MULTI_SURROUND_RADIUS_PADDING = 2.6;
@@ -21,6 +21,11 @@ const MULTI_SURROUND_WALL_SPACING_FORCE = 1.8;
 const MULTI_SURROUND_TARGET_COHESION_FORCE = 1.5;
 const MOVE_TOWARD_NEIGHBOR_COUNT = 2;
 const POSSESSION_MANUAL_FORCE = 4.4;
+const POSSESSION_KILL_RANGE = PARTICLE_RADIUS * 3.2;
+const MATRIX_INTERACTION_RANGE = INTERACTION_RANGE;
+const MATRIX_CLOSE_RANGE_FRACTION = 0.045;
+const MATRIX_FORCE = 3;
+const MATRIX_MAX_SPEED = 4.5;
 const MOVEMENT_ACTIONS = new Set(["moveToward", "moveAway", "surround", "eat"]);
 const ACTION_OPTIONS = [
   { value: "moveToward", label: "move toward" },
@@ -69,6 +74,9 @@ const refs = {
   worldPanel: document.getElementById("worldPanel"),
   multiSurroundToggle: document.getElementById("multiSurroundToggle"),
   disableSideWarpToggle: document.getElementById("disableSideWarpToggle"),
+  useMatrixToggle: document.getElementById("useMatrixToggle"),
+  randomRunToggle: document.getElementById("randomRunToggle"),
+  randomiseBtn: document.getElementById("randomiseBtn"),
   maxSurroundPerParticleInput: document.getElementById("maxSurroundPerParticleInput"),
   maxSurroundPerGroupInput: document.getElementById("maxSurroundPerGroupInput"),
   pauseBtn: document.getElementById("pauseBtn"),
@@ -80,6 +88,7 @@ const refs = {
   infoExitFullscreenBtn: document.getElementById("infoExitFullscreenBtn"),
   selectedParticle: document.getElementById("selectedParticle"),
   selfTestOutput: document.getElementById("selfTestOutput"),
+  matrixActiveNotice: document.getElementById("matrixActiveNotice"),
 };
 
 const state = {
@@ -103,14 +112,17 @@ const state = {
   fullscreenWorld: false,
   multiSurround: false,
   disableSideWarp: false,
+  useMatrix: false,
   maxSurroundPerParticle: 0,
   maxSurroundPerGroup: 0,
   selectedParticleId: null,
   possessedParticleId: null,
   possessionScriptEnabled: {},
+  possessionKillTouchingOnF: false,
   pressedKeys: new Set(),
   nextParticleId: 1,
   lastFrame: performance.now(),
+  matrixInputsGrid: [],
 };
 
 initialize();
@@ -118,6 +130,9 @@ initialize();
 function initialize() {
   applyQueryConfig();
   state.ctx = setupCanvasContext(refs.worldCanvas, WORLD_SIZE, WORLD_SIZE);
+  state.matrixInputsGrid = buildMatrixInputsGrid();
+  state.useMatrix = Boolean(refs.useMatrixToggle?.checked);
+  applyMatrixControlsEnabled();
   resetWorld();
   bindEvents();
   renderScripts();
@@ -140,11 +155,19 @@ function bindEvents() {
   refs.fullscreenWorldBtn.addEventListener("click", toggleWorldFullscreen);
   refs.exportCodeBtn.addEventListener("click", exportConfigCode);
   refs.importCodeBtn.addEventListener("click", importConfigCode);
+  refs.randomiseBtn?.addEventListener("click", () => {
+    if (!state.useMatrix) return;
+    randomiseMatrixInputs();
+  });
   refs.multiSurroundToggle.addEventListener("change", (event) => {
     state.multiSurround = event.target.checked;
   });
   refs.disableSideWarpToggle?.addEventListener("change", (event) => {
     state.disableSideWarp = event.target.checked;
+  });
+  refs.useMatrixToggle?.addEventListener("change", (event) => {
+    state.useMatrix = event.target.checked;
+    applyMatrixControlsEnabled();
   });
   refs.maxSurroundPerParticleInput.addEventListener("change", (event) => {
     state.maxSurroundPerParticle = clampInt(event.target.value, 0, MAX_PARTICLES, 0);
@@ -153,6 +176,9 @@ function bindEvents() {
   refs.maxSurroundPerGroupInput.addEventListener("change", (event) => {
     state.maxSurroundPerGroup = clampInt(event.target.value, 0, MAX_PARTICLES, 0);
     refs.maxSurroundPerGroupInput.value = String(state.maxSurroundPerGroup);
+  });
+  document.querySelectorAll(".matrix-input").forEach((input) => {
+    input.addEventListener("change", () => normalizeMatrixInput(input));
   });
   refs.infoExitFullscreenBtn.addEventListener("click", () => {
     if (!state.fullscreenWorld) return;
@@ -196,6 +222,9 @@ function createScript() {
 function resetWorld() {
   const previousSelectedParticleId = state.selectedParticleId;
   const previousPossessedParticleId = state.possessedParticleId;
+  if (state.useMatrix && refs.randomRunToggle?.checked) {
+    randomiseMatrixInputs();
+  }
   state.nextParticleId = 1;
   const initialParticles = buildResetParticles();
 
@@ -527,15 +556,22 @@ function updateSimulation(deltaSeconds) {
     forces.set(particle.id, { x: 0, y: 0 });
   });
 
-  applyGlobalRepulsion(forces);
-  applyScriptForces(forces);
+  if (!state.useMatrix) {
+    applyGlobalRepulsion(forces);
+  }
+  if (state.useMatrix) {
+    applyMatrixForces(forces);
+  } else {
+    applyScriptForces(forces);
+  }
   applyPossessionControl(forces);
 
   state.particles.forEach((particle) => {
     const force = forces.get(particle.id) || { x: 0, y: 0 };
     particle.vx = particle.vx * GLOBAL_FRICTION + force.x * stepSeconds;
     particle.vy = particle.vy * GLOBAL_FRICTION + force.y * stepSeconds;
-    dampVelocity(particle, 0.9, 0.9);
+    const speedCap = state.useMatrix ? MATRIX_MAX_SPEED : 0.9;
+    dampVelocity(particle, speedCap, speedCap);
     moveParticle(particle, particle.vx * stepSeconds * 28, particle.vy * stepSeconds * 28);
     particle.heading = Math.atan2(particle.vy, particle.vx);
   });
@@ -1309,6 +1345,22 @@ function renderSelectedParticle() {
     });
   }
 
+  const killTouchingRow = document.createElement("label");
+  killTouchingRow.className = "possession-toggle";
+
+  const killTouchingCheckbox = document.createElement("input");
+  killTouchingCheckbox.type = "checkbox";
+  killTouchingCheckbox.checked = state.possessionKillTouchingOnF;
+  killTouchingCheckbox.addEventListener("change", (event) => {
+    state.possessionKillTouchingOnF = event.target.checked;
+    renderSelectedParticle();
+  });
+
+  const killTouchingText = document.createElement("span");
+  killTouchingText.textContent = "F kills touching or very close particles";
+  killTouchingRow.append(killTouchingCheckbox, killTouchingText);
+  panel.appendChild(killTouchingRow);
+
   const hint = document.createElement("div");
   hint.className = manualControlActive ? "possession-hint is-active" : "possession-hint";
   hint.textContent = manualControlActive
@@ -1365,6 +1417,13 @@ function applyPossessionControl(forces) {
 
 function handleKeyDown(event) {
   const key = event.key.toLowerCase();
+  if (key === "f") {
+    if (state.possessedParticleId !== null) {
+      event.preventDefault();
+      killTouchingParticlesFromPossession();
+    }
+    return;
+  }
   if (!isPossessionMovementKey(key)) return;
   state.pressedKeys.add(key);
   if (state.possessedParticleId !== null) {
@@ -1383,6 +1442,31 @@ function handleKeyUp(event) {
 
 function isPossessionMovementKey(key) {
   return ["arrowleft", "arrowright", "arrowup", "arrowdown", "w", "a", "s", "d"].includes(key);
+}
+
+function killTouchingParticlesFromPossession() {
+  if (!state.possessionKillTouchingOnF) return 0;
+  const possessed = state.particles.find((particle) => particle.id === state.possessedParticleId);
+  if (!possessed) return 0;
+
+  const touchingIds = getTouchingParticles(possessed).map((particle) => particle.id);
+  if (touchingIds.length === 0) return 0;
+
+  const killedIds = new Set(touchingIds);
+  state.particles = state.particles.filter((particle) => !killedIds.has(particle.id));
+  if (state.selectedParticleId && !state.particles.some((particle) => particle.id === state.selectedParticleId)) {
+    state.selectedParticleId = state.possessedParticleId;
+  }
+  updateHud();
+  renderSelectedParticle();
+  return killedIds.size;
+}
+
+function getTouchingParticles(source) {
+  return state.particles.filter((particle) => {
+    if (particle.id === source.id) return false;
+    return getWrappedDistance(source, particle) <= POSSESSION_KILL_RANGE;
+  });
 }
 
 function describeScript(script) {
@@ -1467,6 +1551,7 @@ function maybeRunSelfTest() {
   const finalDistance = Number(getPrimaryPairDistance().toFixed(3));
   const aggregateMetric = getAggregateScriptMetric();
   const possession = runPossessionSelfTest();
+  const possessionKill = runPossessionKillSelfTest();
   const sideWarp = runSideWarpSelfTest();
   const result = {
     counts: { ...state.resetCounts },
@@ -1487,8 +1572,9 @@ function maybeRunSelfTest() {
     multiSurround: state.multiSurround,
     disableSideWarp: state.disableSideWarp,
     possession,
+    possessionKill,
     sideWarp,
-    pass: Number.isFinite(finalDistance) && possession.pass && sideWarp.pass,
+    pass: Number.isFinite(finalDistance) && possession.pass && possessionKill.pass && sideWarp.pass,
   };
 
   refs.selfTestOutput.hidden = false;
@@ -1567,6 +1653,93 @@ function runSideWarpSelfTest() {
   };
 }
 
+function runPossessionKillSelfTest() {
+  const previousKillSetting = state.possessionKillTouchingOnF;
+  const previousDisableSideWarp = state.disableSideWarp;
+
+  state.disableSideWarp = false;
+  state.possessionKillTouchingOnF = true;
+  state.particles = [
+    { id: 1, color: "red", x: 50, y: 50, vx: 0, vy: 0, heading: 0, spawnCooldown: 0, eatCooldown: 0 },
+    {
+      id: 2,
+      color: "green",
+      x: 50 + POSSESSION_KILL_RANGE - 0.1,
+      y: 50,
+      vx: 0,
+      vy: 0,
+      heading: 0,
+      spawnCooldown: 0,
+      eatCooldown: 0,
+    },
+    {
+      id: 3,
+      color: "blue",
+      x: 50 + POSSESSION_KILL_RANGE + 1.2,
+      y: 50,
+      vx: 0,
+      vy: 0,
+      heading: 0,
+      spawnCooldown: 0,
+      eatCooldown: 0,
+    },
+  ];
+  state.selectedParticleId = 1;
+  state.possessedParticleId = 1;
+
+  let prevented = false;
+  handleKeyDown({
+    key: "f",
+    repeat: false,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+
+  const killedNearby = !state.particles.some((particle) => particle.id === 2);
+  state.particles.push({
+    id: 4,
+    color: "yellow",
+    x: 50,
+    y: 50 + POSSESSION_KILL_RANGE - 0.1,
+    vx: 0,
+    vy: 0,
+    heading: 0,
+    spawnCooldown: 0,
+    eatCooldown: 0,
+  });
+
+  let preventedRepeat = false;
+  handleKeyDown({
+    key: "f",
+    repeat: true,
+    preventDefault() {
+      preventedRepeat = true;
+    },
+  });
+
+  const killedRepeatNearby = !state.particles.some((particle) => particle.id === 4);
+  const keptFar = state.particles.some((particle) => particle.id === 3);
+  const keptPossessed = state.particles.some((particle) => particle.id === 1);
+
+  state.possessedParticleId = null;
+  state.selectedParticleId = null;
+  state.possessionKillTouchingOnF = previousKillSetting;
+  state.disableSideWarp = previousDisableSideWarp;
+  resetWorld();
+
+  return {
+    pass: prevented && preventedRepeat && killedNearby && killedRepeatNearby && keptFar && keptPossessed,
+    prevented,
+    preventedRepeat,
+    killedNearby,
+    killedRepeatNearby,
+    keptFar,
+    keptPossessed,
+    range: POSSESSION_KILL_RANGE.toFixed(3),
+  };
+}
+
 function applyQueryConfig() {
   const params = new URLSearchParams(window.location.search);
   state.multiSurround = params.get("multiSurround") === "1";
@@ -1617,6 +1790,37 @@ function clampInt(value, min, max, fallback) {
   const number = Number(value);
   if (Number.isNaN(number)) return fallback;
   return Math.round(clamp(number, min, max));
+}
+
+function normalizeMatrixInput(input) {
+  if (input.value === "") return;
+  const value = Number(input.value);
+  if (Number.isNaN(value)) {
+    input.value = "";
+    return;
+  }
+  input.value = (Math.round(clamp(value, -1, 1) * 10) / 10).toFixed(1);
+}
+
+function applyMatrixControlsEnabled() {
+  const enabled = state.useMatrix;
+  document.querySelectorAll(".matrix-input").forEach((input) => {
+    input.disabled = !enabled;
+  });
+  if (refs.randomiseBtn) refs.randomiseBtn.disabled = !enabled;
+  if (refs.randomRunToggle) refs.randomRunToggle.disabled = !enabled;
+  document.querySelectorAll(".matrix-wrap").forEach((el) => {
+    el.classList.toggle("is-disabled", !enabled);
+  });
+  const randomRunLabel = refs.randomRunToggle?.closest("label");
+  randomRunLabel?.classList.toggle("is-disabled", !enabled);
+  if (refs.matrixActiveNotice) refs.matrixActiveNotice.hidden = !enabled;
+}
+
+function randomiseMatrixInputs() {
+  document.querySelectorAll(".matrix-input").forEach((input) => {
+    input.value = (Math.floor(Math.random() * 21 - 10) / 10).toFixed(1);
+  });
 }
 
 function randomFloat(min, max) {
@@ -1982,6 +2186,63 @@ function getAggregateScriptMetric() {
     minSourceToTargetDistance: Math.min(...distances).toFixed(3),
     maxSourceToTargetDistance: Math.max(...distances).toFixed(3),
   };
+}
+
+function buildMatrixInputsGrid() {
+  const rows = Array.from(document.querySelectorAll(".particle-matrix tbody tr"));
+  return rows.map((row) => Array.from(row.querySelectorAll("input.matrix-input")));
+}
+
+function getMatrixValue(rowColor, colColor) {
+  const rowIndex = COLORS.findIndex((color) => color.value === rowColor);
+  const colIndex = COLORS.findIndex((color) => color.value === colColor);
+  if (rowIndex === -1 || colIndex === -1) return 0;
+  const input = state.matrixInputsGrid[rowIndex]?.[colIndex];
+  if (!input) return 0;
+  const value = Number(input.value);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getMatrixForceMagnitude(normalizedDistance, value) {
+  const beta = MATRIX_CLOSE_RANGE_FRACTION;
+  if (normalizedDistance < beta) {
+    // Universal close-range repulsion regardless of the matrix value, so particles never fully overlap.
+    return normalizedDistance / beta - 1;
+  }
+  if (normalizedDistance < 1) {
+    return value * (1 - Math.abs(2 * normalizedDistance - 1 - beta) / (1 - beta));
+  }
+  return 0;
+}
+
+function applyMatrixForces(forces) {
+  const particles = state.particles;
+  for (let i = 0; i < particles.length; i += 1) {
+    const a = particles[i];
+    for (let j = i + 1; j < particles.length; j += 1) {
+      const b = particles[j];
+      const offset = getWrappedOffset(a, b);
+      const distance = Math.hypot(offset.dx, offset.dy);
+      if (distance === 0 || distance > MATRIX_INTERACTION_RANGE) continue;
+
+      const normalizedDistance = distance / MATRIX_INTERACTION_RANGE;
+      const nx = offset.dx / distance;
+      const ny = offset.dy / distance;
+
+      // Column ("top") color is the affected particle; row ("side") color is the one exerting the pull/push.
+      const valueForA = getMatrixValue(b.color, a.color);
+      const valueForB = getMatrixValue(a.color, b.color);
+      const magnitudeForA = getMatrixForceMagnitude(normalizedDistance, valueForA);
+      const magnitudeForB = getMatrixForceMagnitude(normalizedDistance, valueForB);
+
+      if (magnitudeForA !== 0) {
+        addForce(forces, a.id, nx, ny, magnitudeForA * MATRIX_FORCE);
+      }
+      if (magnitudeForB !== 0) {
+        addForce(forces, b.id, -nx, -ny, magnitudeForB * MATRIX_FORCE);
+      }
+    }
+  }
 }
 
 function applyGlobalRepulsion(forces) {

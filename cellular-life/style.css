@@ -321,6 +321,113 @@ textarea {
   flex-wrap: wrap;
 }
 
+.matrix-wrap.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.button:disabled,
+.toggle-row.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.button:disabled:hover {
+  transform: none;
+}
+
+.matrix-wrap {
+  margin-top: 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.particle-matrix {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.particle-matrix th,
+.particle-matrix td {
+  min-width: 34px;
+  height: 34px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.particle-matrix th {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.particle-matrix td {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.particle-matrix .matrix-input {
+  width: 42px;
+  height: 28px;
+  padding: 3px 4px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.72rem;
+}
+
+.color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0;
+  border-radius: 50%;
+  vertical-align: -1px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.color-dot.red {
+  background: #ff4a4a;
+}
+
+.color-dot.orange {
+  background: #ff9b42;
+}
+
+.color-dot.yellow {
+  background: #ffd84a;
+}
+
+.color-dot.green {
+  background: #50df67;
+}
+
+.color-dot.blue {
+  background: #53a7ff;
+}
+
+.color-dot.purple {
+  background: #b773ff;
+}
+
+.color-dot.pink {
+  background: #ff74bf;
+}
+
+.color-dot.brown {
+  background: #9c6a42;
+}
+
+.color-dot.white {
+  background: #f4f4ef;
+}
+
 .notes-box,
 .selected-card {
   margin-top: 18px;
