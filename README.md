@@ -1,6 +1,6 @@
 # Codex
 
-A collection of interactive web applications.
+A collection of interactive applications.
 
 ## Projects
 
