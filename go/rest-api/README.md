@@ -49,13 +49,22 @@ dashboard metadata:
 {
   "title": "Connect 4",
   "description": "A browser implementation of the classic game.",
-  "category": "games"
+  "category": "games",
+  "image": "assets/preview.png",
+  "technologies": ["JavaScript", "Canvas"],
+  "featured": true,
+  "status": "active"
 }
 ```
 
 All fields are optional. Without this file, the dashboard uses the folder name
 as the title and the detected project type as the category. Invalid JSON causes
 the projects API to return an error so configuration problems are visible.
+
+`image` must be a safe path relative to the project directory. The API exposes
+it through the protected `/projects/<name>/` route. `technologies` is an array
+of strings, `featured` is a boolean, and `status` is a short free-form label.
+When omitted, they respectively return `""`, `[]`, `false`, and `""`.
 
 Logs are emitted as JSON to standard output, which makes them easy to collect
 and query in production environments.

@@ -17,20 +17,28 @@ import (
 
 // Project is metadata for a single direct child project of the repository root.
 type Project struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
-	Type        string `json:"type"`
-	URL         string `json:"url"`
+	Name         string   `json:"name"`
+	Title        string   `json:"title"`
+	Description  string   `json:"description"`
+	Category     string   `json:"category"`
+	Image        string   `json:"image"`
+	Technologies []string `json:"technologies"`
+	Featured     bool     `json:"featured"`
+	Status       string   `json:"status"`
+	Type         string   `json:"type"`
+	URL          string   `json:"url"`
 }
 
 // projectMetadata contains optional UI fields read from a project's project.json.
 // Pointers distinguish an omitted field from an explicitly empty value.
 type projectMetadata struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Category    *string `json:"category"`
+	Title        *string   `json:"title"`
+	Description  *string   `json:"description"`
+	Category     *string   `json:"category"`
+	Image        *string   `json:"image"`
+	Technologies *[]string `json:"technologies"`
+	Featured     *bool     `json:"featured"`
+	Status       *string   `json:"status"`
 }
 
 type response struct {
@@ -77,8 +85,9 @@ func list(repositoryRoot string) ([]Project, error) {
 		}
 
 		project := Project{
-			Name:  entry.Name(),
-			Title: entry.Name(),
+			Name:         entry.Name(),
+			Title:        entry.Name(),
+			Technologies: make([]string, 0),
 			// The detected type is a useful default UI category for projects
 			// that have not yet opted into project.json.
 			Category: projectType,
@@ -91,7 +100,9 @@ func list(repositoryRoot string) ([]Project, error) {
 			return nil, fmt.Errorf("read metadata for %q: %w", entry.Name(), err)
 		}
 		if exists {
-			applyMetadata(&project, metadata)
+			if err := applyMetadata(&project, metadata); err != nil {
+				return nil, fmt.Errorf("apply metadata for %q: %w", entry.Name(), err)
+			}
 		}
 		projects = append(projects, project)
 	}
@@ -127,7 +138,7 @@ func readMetadata(directory string) (projectMetadata, bool, error) {
 	return metadata, true, nil
 }
 
-func applyMetadata(project *Project, metadata projectMetadata) {
+func applyMetadata(project *Project, metadata projectMetadata) error {
 	if metadata.Title != nil {
 		project.Title = *metadata.Title
 	}
@@ -137,6 +148,41 @@ func applyMetadata(project *Project, metadata projectMetadata) {
 	if metadata.Category != nil {
 		project.Category = *metadata.Category
 	}
+	if metadata.Image != nil {
+		imageURL, err := projectAssetURL(project.Name, *metadata.Image)
+		if err != nil {
+			return err
+		}
+		project.Image = imageURL
+	}
+	if metadata.Technologies != nil {
+		project.Technologies = *metadata.Technologies
+	}
+	if metadata.Featured != nil {
+		project.Featured = *metadata.Featured
+	}
+	if metadata.Status != nil {
+		project.Status = *metadata.Status
+	}
+	return nil
+}
+
+// projectAssetURL converts a project-relative metadata asset path into the
+// existing protected project-file route. Empty values deliberately mean no image.
+func projectAssetURL(projectName, assetPath string) (string, error) {
+	if assetPath == "" {
+		return "", nil
+	}
+
+	parts := strings.Split(assetPath, "/")
+	escapedParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." || strings.Contains(part, "\\") {
+			return "", errors.New("image must be a safe project-relative path")
+		}
+		escapedParts = append(escapedParts, url.PathEscape(part))
+	}
+	return "/projects/" + url.PathEscape(projectName) + "/" + strings.Join(escapedParts, "/"), nil
 }
 
 // NewPageHandler serves browser files belonging to known projects below /projects/.

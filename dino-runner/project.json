@@ -1,0 +1,12 @@
+{
+    "title": "Dino Runner",
+    "description": "A browser game experiment inspired by endless runner mechanics.",
+    "category": "game",
+    "technologies": [
+        "HTML",
+        "CSS",
+        "JavaScript"
+    ],
+    "featured": false,
+    "status": "active"
+}

@@ -258,6 +258,10 @@ Metadata fields:
 * title
 * description
 * category
+* image (a project-relative preview asset)
+* technologies (a list of strings)
+* featured (a boolean)
+* status (a short lifecycle label)
 
 Projects without metadata continue to work using fallback values derived from:
 
@@ -265,6 +269,10 @@ Projects without metadata continue to work using fallback values derived from:
 * detected project type
 
 This allows incremental migration of existing projects.
+
+Preview images are exposed only through the protected project route, not as
+filesystem paths. Projects without metadata receive empty image/technologies/
+status values and `false` for featured.
 
 ---
 

@@ -1,0 +1,12 @@
+{
+    "title": "Creature Simulation",
+    "description": "An experiment exploring autonomous creatures, behavior, and simulated environments.",
+    "category": "simulation",
+    "technologies": [
+        "HTML",
+        "JavaScript",
+        "Simulation"
+    ],
+    "featured": false,
+    "status": "active"
+}

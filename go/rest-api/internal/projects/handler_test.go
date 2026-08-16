@@ -27,7 +27,7 @@ func TestNewHandlerUsesFallbackWithoutMetadata(t *testing.T) {
 	if contentType := recorder.Header().Get("Content-Type"); contentType != "application/json; charset=utf-8" {
 		t.Fatalf("Content-Type = %q, want application/json; charset=utf-8", contentType)
 	}
-	want := "{\"projects\":[{\"name\":\"alpha\",\"title\":\"alpha\",\"description\":\"\",\"category\":\"go\",\"type\":\"go\",\"url\":\"/projects/alpha/\"},{\"name\":\"zeta\",\"title\":\"zeta\",\"description\":\"\",\"category\":\"web\",\"type\":\"web\",\"url\":\"/projects/zeta/\"}]}\n"
+	want := "{\"projects\":[{\"name\":\"alpha\",\"title\":\"alpha\",\"description\":\"\",\"category\":\"go\",\"image\":\"\",\"technologies\":[],\"featured\":false,\"status\":\"\",\"type\":\"go\",\"url\":\"/projects/alpha/\"},{\"name\":\"zeta\",\"title\":\"zeta\",\"description\":\"\",\"category\":\"web\",\"image\":\"\",\"technologies\":[],\"featured\":false,\"status\":\"\",\"type\":\"web\",\"url\":\"/projects/zeta/\"}]}\n"
 	if body := recorder.Body.String(); body != want {
 		t.Fatalf("body = %q, want %q", body, want)
 	}
@@ -41,7 +41,11 @@ func TestNewHandlerUsesProjectMetadata(t *testing.T) {
 	createProjectMetadata(t, repositoryRoot, "connect-4", `{
   "title": "Connect 4",
   "description": "A browser implementation of the classic game.",
-  "category": "games"
+  "category": "games",
+  "image": "assets/preview.png",
+  "technologies": ["JavaScript", "Canvas"],
+  "featured": true,
+  "status": "active"
 }`)
 
 	recorder := httptest.NewRecorder()
@@ -50,9 +54,24 @@ func TestNewHandlerUsesProjectMetadata(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
-	want := "{\"projects\":[{\"name\":\"connect-4\",\"title\":\"Connect 4\",\"description\":\"A browser implementation of the classic game.\",\"category\":\"games\",\"type\":\"web\",\"url\":\"/projects/connect-4/\"}]}\n"
+	want := "{\"projects\":[{\"name\":\"connect-4\",\"title\":\"Connect 4\",\"description\":\"A browser implementation of the classic game.\",\"category\":\"games\",\"image\":\"/projects/connect-4/assets/preview.png\",\"technologies\":[\"JavaScript\",\"Canvas\"],\"featured\":true,\"status\":\"active\",\"type\":\"web\",\"url\":\"/projects/connect-4/\"}]}\n"
 	if body := recorder.Body.String(); body != want {
 		t.Fatalf("body = %q, want %q", body, want)
+	}
+}
+
+func TestNewHandlerReturnsInternalServerErrorForUnsafeMetadataImage(t *testing.T) {
+	t.Parallel()
+
+	repositoryRoot := t.TempDir()
+	createProjectFile(t, repositoryRoot, "unsafe", "index.html")
+	createProjectMetadata(t, repositoryRoot, "unsafe", `{"image":"../secret.png"}`)
+
+	recorder := httptest.NewRecorder()
+	NewHandler(repositoryRoot).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/projects", nil))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
 	}
 }
 
