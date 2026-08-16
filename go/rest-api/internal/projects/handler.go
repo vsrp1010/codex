@@ -2,19 +2,35 @@
 package projects
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // Project is metadata for a single direct child project of the repository root.
 type Project struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Type string `json:"type"`
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	Type        string `json:"type"`
+	URL         string `json:"url"`
+}
+
+// projectMetadata contains optional UI fields read from a project's project.json.
+// Pointers distinguish an omitted field from an explicitly empty value.
+type projectMetadata struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Category    *string `json:"category"`
 }
 
 type response struct {
@@ -60,15 +76,161 @@ func list(repositoryRoot string) ([]Project, error) {
 			continue
 		}
 
-		projects = append(projects, Project{
-			Name: entry.Name(),
-			Path: entry.Name(),
-			Type: projectType,
-		})
+		project := Project{
+			Name:  entry.Name(),
+			Title: entry.Name(),
+			// The detected type is a useful default UI category for projects
+			// that have not yet opted into project.json.
+			Category: projectType,
+			Type:     projectType,
+			URL:      "/projects/" + url.PathEscape(entry.Name()) + "/",
+		}
+
+		metadata, exists, err := readMetadata(filepath.Join(repositoryRoot, entry.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("read metadata for %q: %w", entry.Name(), err)
+		}
+		if exists {
+			applyMetadata(&project, metadata)
+		}
+		projects = append(projects, project)
 	}
 
 	sort.Slice(projects, func(i, j int) bool { return projects[i].Name < projects[j].Name })
 	return projects, nil
+}
+
+func readMetadata(directory string) (projectMetadata, bool, error) {
+	metadataPath := filepath.Join(directory, "project.json")
+	info, err := os.Lstat(metadataPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return projectMetadata{}, false, nil
+	}
+	if err != nil {
+		return projectMetadata{}, false, err
+	}
+	if !info.Mode().IsRegular() {
+		return projectMetadata{}, false, errors.New("project.json must be a regular file")
+	}
+
+	contents, err := os.ReadFile(metadataPath)
+	if err != nil {
+		return projectMetadata{}, false, err
+	}
+	if contents = bytes.TrimSpace(contents); len(contents) == 0 || contents[0] != '{' {
+		return projectMetadata{}, false, errors.New("project.json must contain a JSON object")
+	}
+	var metadata projectMetadata
+	if err := json.Unmarshal(contents, &metadata); err != nil {
+		return projectMetadata{}, false, fmt.Errorf("invalid project.json: %w", err)
+	}
+	return metadata, true, nil
+}
+
+func applyMetadata(project *Project, metadata projectMetadata) {
+	if metadata.Title != nil {
+		project.Title = *metadata.Title
+	}
+	if metadata.Description != nil {
+		project.Description = *metadata.Description
+	}
+	if metadata.Category != nil {
+		project.Category = *metadata.Category
+	}
+}
+
+// NewPageHandler serves browser files belonging to known projects below /projects/.
+// It expects the full request path so it can validate both the project name and
+// any nested asset path before accessing the repository filesystem.
+func NewPageHandler(repositoryRoot string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		projectName, filePath, ok := requestedFile(r.URL.Path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+
+		file, err := projectFile(repositoryRoot, projectName, filePath)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, file)
+	})
+}
+
+func requestedFile(requestPath string) (projectName, filePath string, ok bool) {
+	const prefix = "/projects/"
+	if !strings.HasPrefix(requestPath, prefix) {
+		return "", "", false
+	}
+
+	parts := strings.Split(strings.TrimPrefix(requestPath, prefix), "/")
+	if len(parts) == 0 || !validProjectName(parts[0]) {
+		return "", "", false
+	}
+	if len(parts) == 1 || (len(parts) == 2 && parts[1] == "") {
+		return parts[0], "index.html", true
+	}
+	for _, part := range parts[1:] {
+		if part == "" || part == "." || part == ".." || strings.Contains(part, "\\") {
+			return "", "", false
+		}
+	}
+
+	return parts[0], path.Join(parts[1:]...), true
+}
+
+func validProjectName(name string) bool {
+	return name != "" && name != "." && name != ".." &&
+		!strings.HasPrefix(name, ".") && !strings.ContainsAny(name, `/\\`)
+}
+
+// projectFile resolves a requested file and confirms it remains within a
+// direct, non-symlink project directory after resolving any file symlinks.
+func projectFile(repositoryRoot, projectName, filePath string) (string, error) {
+	repositoryRoot, err := filepath.EvalSymlinks(repositoryRoot)
+	if err != nil {
+		return "", err
+	}
+
+	projectDirectory := filepath.Join(repositoryRoot, projectName)
+	info, err := os.Lstat(projectDirectory)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", os.ErrNotExist
+	}
+	if _, found, err := detectType(projectDirectory); err != nil || !found {
+		return "", os.ErrNotExist
+	}
+
+	resolvedProjectDirectory, err := filepath.EvalSymlinks(projectDirectory)
+	if err != nil {
+		return "", err
+	}
+	resolvedFile, err := filepath.EvalSymlinks(filepath.Join(projectDirectory, filepath.FromSlash(filePath)))
+	if err != nil {
+		return "", err
+	}
+	if !within(resolvedProjectDirectory, resolvedFile) {
+		return "", os.ErrPermission
+	}
+
+	fileInfo, err := os.Stat(resolvedFile)
+	if err != nil || !fileInfo.Mode().IsRegular() {
+		return "", os.ErrNotExist
+	}
+	return resolvedFile, nil
+}
+
+func within(directory, filename string) bool {
+	relativePath, err := filepath.Rel(directory, filename)
+	return err == nil && relativePath != ".." && !strings.HasPrefix(relativePath, ".."+string(filepath.Separator))
 }
 
 func detectType(directory string) (projectType string, found bool, err error) {

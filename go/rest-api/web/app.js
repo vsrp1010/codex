@@ -34,14 +34,24 @@ function renderProjects(projects) {
     const card = document.createElement("article");
     card.className = "project-card";
 
+    const link = document.createElement("a");
+    link.className = "project-link";
+    link.href = project.url;
+    link.setAttribute("aria-label", `Open ${project.name}`);
+
     const title = document.createElement("h3");
-    title.textContent = project.name;
+    title.textContent = project.title;
 
     const details = document.createElement("p");
     details.className = "project-details";
-    details.textContent = `${project.type} project · ${project.path}`;
+    details.textContent = project.category;
 
-    card.append(title, details);
+    const description = document.createElement("p");
+    description.className = "project-description";
+    description.textContent = project.description || `${project.type} project`;
+
+    link.append(title, details, description);
+    card.append(link);
     fragment.append(card);
   }
   projectList.replaceChildren(fragment);

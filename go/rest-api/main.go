@@ -33,8 +33,9 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("GET /health", health.Handler())
 	mux.Handle("GET /api/projects", projects.NewHandler(repositoryRoot))
+	mux.Handle("/projects/", projects.NewPageHandler(repositoryRoot))
 	// FileServer serves index.html at / and the remaining static web assets.
-	// The more-specific API and health routes above take precedence.
+	// The more-specific API, health, and project-page routes take precedence.
 	mux.Handle("/", http.FileServer(http.Dir("web")))
 
 	server := &http.Server{

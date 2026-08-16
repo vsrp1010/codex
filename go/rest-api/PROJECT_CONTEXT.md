@@ -1,14 +1,21 @@
-# Project Context: Go REST API Experiment
+# Project Context: Go Project Dashboard and REST API
 
 ## Overview
 
-This project is a Go-based REST API experiment inside the larger `codex` repository.
+This project is a Go-based web application inside the larger `codex` repository.
 
-The parent `codex` repository is a general AI playground containing various experiments and showcases, including games, simulations, and AI-related projects.
+The parent `codex` repository is a general AI playground containing experiments, games, simulations, and interactive showcases.
 
-This sub-project focuses on learning and building a maintainable Go HTTP service that can eventually provide APIs and a web interface for interacting with projects in the `codex` repository.
+This sub-project has evolved from a simple REST API experiment into a Go-powered project dashboard and launcher.
 
-The project will initially use a Go-served frontend rather than a separate frontend framework.
+The application provides:
+
+* a browser-based dashboard UI
+* REST APIs for project discovery
+* metadata-driven project descriptions
+* controlled launching/serving of projects from the parent repository
+
+The project intentionally uses a Go-served frontend rather than a separate frontend framework.
 
 ---
 
@@ -76,6 +83,16 @@ Go standard library net/http
 
 No external web framework is currently used.
 
+Frontend:
+
+```
+HTML
+CSS
+Vanilla JavaScript
+```
+
+No frontend framework is used.
+
 ---
 
 ## Current Project Structure
@@ -91,32 +108,32 @@ rest-api/
 │   ├── app.js
 │   └── style.css
 └── internal/
-    └── health/
+    ├── health/
+    │   ├── handler.go
+    │   └── handler_test.go
+    │
+    └── projects/
         ├── handler.go
         └── handler_test.go
 ```
 
 ---
 
-## Current Application Behavior
+## Application Routes
 
-The application starts an HTTP server:
+The application runs:
 
 ```
 localhost:8080
 ```
 
-Current endpoint:
+### Health endpoint
 
 ```
 GET /health
-GET /api/projects
 ```
 
-The root route (`GET /`) serves a small browser UI from `web/`. Its plain
-JavaScript calls `GET /api/projects` to display the repository projects.
-
-Response:
+Example response:
 
 ```json
 {
@@ -124,11 +141,130 @@ Response:
 }
 ```
 
-Example test:
+Test:
 
 ```bash
 curl http://localhost:8080/health
 ```
+
+---
+
+### Dashboard UI
+
+```
+GET /
+```
+
+The root route serves the browser dashboard from:
+
+```
+web/
+```
+
+The dashboard uses vanilla JavaScript to call:
+
+```
+GET /api/projects
+```
+
+and dynamically render available projects.
+
+---
+
+### Project API
+
+```
+GET /api/projects
+```
+
+Returns metadata about projects discovered in the parent `codex` repository.
+
+Projects are discovered by checking direct child directories.
+
+A project is currently recognized when it contains:
+
+```
+index.html
+```
+
+or:
+
+```
+go.mod
+```
+
+The API returns:
+
+* project name
+* type
+* URL
+* optional metadata
+
+---
+
+### Project Launcher
+
+```
+GET /projects/{project-name}/
+```
+
+This route serves a selected project's web entry point and assets.
+
+Example:
+
+```
+/projects/connect-4/
+```
+
+serves:
+
+```
+codex/connect-4/index.html
+```
+
+The parent repository is not exposed as a general static directory.
+
+Only approved project directories are served.
+
+Security protections include:
+
+* traversal prevention
+* hidden directory rejection
+* symlink escape prevention
+* direct-child project validation
+
+---
+
+## Project Metadata
+
+Projects may optionally include:
+
+```
+project.json
+```
+
+Example:
+
+```json
+{
+  "title": "Connect Four AI",
+  "description": "A Connect Four experiment with AI gameplay",
+  "category": "game"
+}
+```
+
+Metadata fields:
+
+* title
+* description
+* category
+
+Projects without metadata continue to work using fallback values derived from:
+
+* directory name
+* detected project type
+
+This allows incremental migration of existing projects.
 
 ---
 
@@ -145,33 +281,62 @@ main.go
 Responsibilities:
 
 * create HTTP server
-* configure routing
+* configure routes
 * configure structured logging
 * handle graceful shutdown
-* register HTTP handlers
+* register handlers
 
-Handlers are organized under:
+Business functionality is organized under:
 
 ```
 internal/
 ```
 
-Current handler:
+Current packages:
 
 ```
 internal/health
 ```
 
-Project metadata handler:
+Handles health checks.
 
 ```
 internal/projects
 ```
 
-`GET /api/projects` lists direct child projects of the codex repository. A
-project is a directory containing `index.html` (type `web`) or `go.mod` (type
-`go`). The repository root is configured through `CODEX_REPOSITORY_ROOT`; when
-unset, local development defaults to two directories above the API directory.
+Handles:
+
+* project discovery
+* metadata loading
+* project API responses
+* controlled project file serving
+
+---
+
+## Architecture Overview
+
+```
+                 Browser
+                    |
+                    |
+              Dashboard UI
+                    |
+                    |
+          ---------------------
+          |                   |
+          v                   v
+
+   GET /api/projects     GET /projects/name/
+
+          |                   |
+          v                   v
+
+ Project Metadata       Project Files
+
+          |
+          |
+    codex repository
+```
 
 ---
 
@@ -188,9 +353,10 @@ Prefer:
 
 Avoid:
 
-* introducing frameworks without a clear benefit
+* introducing frameworks without clear benefit
 * premature microservice patterns
-* unnecessary complexity
+* unnecessary dependencies
+* over-engineering
 
 ---
 
@@ -200,39 +366,32 @@ Primary development tools:
 
 * VS Code
 * Codex plugin for code generation
-* ChatGPT for architecture/design discussions
+* ChatGPT for architecture discussions and planning
 
 Workflow:
 
 1. Discuss architecture and design decisions.
-2. Update PROJECT_CONTEXT.md when important decisions are made.
-3. Use Codex plugin to implement changes.
-4. Test locally.
+2. Update PROJECT_CONTEXT.md after meaningful decisions.
+3. Use Codex to implement approved changes.
+4. Run tests locally.
 5. Update documentation/context as the project evolves.
 
 ---
 
 ## Planned Evolution
 
-The project may evolve toward:
+Possible future capabilities:
 
-```
-Browser UI
-    |
-    |
-Go HTTP API
-    |
-    |
-Project metadata / AI experiments
-```
+* richer project metadata
+* project categories and filtering
+* project screenshots/previews
+* AI experiment launcher
+* dashboard improvements
+* API integrations
+* authentication if needed
+* richer frontend only if complexity requires it
 
-Potential future capabilities:
-
-* expose information about projects inside the parent `codex` repository
-* provide APIs for AI demos
-* provide a web dashboard
-* serve HTML/CSS/JavaScript frontend
-* integrate AI-related functionality
+The project should continue evolving as a lightweight Go-powered platform for launching and exploring AI experiments.
 
 ---
 
@@ -242,19 +401,24 @@ Completed:
 
 * Go environment configured
 * Go module created
-* HTTP server running
+* HTTP server implemented
 * Health endpoint implemented
 * Graceful shutdown implemented
 * Structured request logging implemented
-* Go-served frontend shell implemented
+* Browser dashboard implemented
+* Project discovery API implemented
+* Project launcher route implemented
+* Safe project file serving implemented
+* Optional project metadata support implemented
+* API and handler tests added
 
 Next likely milestones:
 
-1. Add additional API endpoints.
-2. Establish handler/model organization.
-3. Add JSON response models.
-4. Add tests for new endpoints.
-5. Add frontend UI integration.
+1. Improve dashboard UI/UX.
+2. Add richer project metadata.
+3. Add project images/previews.
+4. Add project status information.
+5. Add AI-specific capabilities.
 
 ---
 
@@ -268,7 +432,7 @@ Use:
 * small packages
 * tests alongside implementation where appropriate
 
-When adding new functionality:
+When adding functionality:
 
 Prefer:
 
@@ -278,7 +442,7 @@ internal/<feature>/
     handler_test.go
 ```
 
-over putting all code into `main.go`.
+over putting logic into `main.go`.
 
 ---
 
@@ -287,10 +451,10 @@ over putting all code into `main.go`.
 Before making changes:
 
 * read this file first
-* preserve the existing architecture
-* explain significant architectural changes before implementing them
-* avoid adding dependencies unless justified
-* keep changes small and incremental
+* preserve existing architecture
+* explain significant architectural changes before implementation
+* avoid adding dependencies without justification
+* keep changes incremental
 
 When generating code:
 

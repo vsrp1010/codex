@@ -70,6 +70,7 @@ h2 {
 
 #project-count,
 .project-details,
+.project-description,
 .status {
   color: #64748b;
 }
@@ -98,7 +99,28 @@ h2 {
 
 .project-card {
   min-height: 9rem;
+  padding: 0;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.project-link {
+  display: block;
+  min-height: 9rem;
+  color: inherit;
+  padding: 1.5rem;
+  text-decoration: none;
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.project-link:hover {
+  background: #f8fafc;
+  box-shadow: 0 0.5rem 1.25rem rgb(15 23 42 / 0.08);
+  transform: translateY(-2px);
+}
+
+.project-link:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
 }
 
 .project-card h3 {
@@ -107,9 +129,17 @@ h2 {
 }
 
 .project-details {
-  margin-bottom: 0;
-  font-size: 0.9375rem;
-  line-height: 1.5;
+	margin-bottom: 0.4rem;
+	color: #2563eb;
+	font-size: 0.9375rem;
+	font-weight: 600;
+	line-height: 1.5;
+}
+
+.project-description {
+	margin-bottom: 0;
+	font-size: 0.9375rem;
+	line-height: 1.5;
 }
 
 .empty-state {
