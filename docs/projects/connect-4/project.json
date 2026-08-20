@@ -1,0 +1,14 @@
+{
+    "title": "Connect Four AI",
+    "description": "A browser-based Connect Four game with AI gameplay.",
+    "category": "game",
+    "technologies": [
+        "HTML",
+        "CSS",
+        "JavaScript",
+        "AI"
+    ],
+    "featured": true,
+    "status": "active",
+    "image": "assets/preview.jpg"
+}

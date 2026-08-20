@@ -191,7 +191,10 @@ codex/docs/
 
 It recursively copies `web/`, writes the project API response to
 `projects.json`, and switches only the generated frontend configuration to the
-static data file. Project directories are not exported.
+static data file. Each discovered launchable project is copied beneath
+`docs/projects/`, excluding common development artifacts. The export is built
+in a temporary directory before replacing the previous output, so stale files
+are removed on every run.
 
 ---
 
