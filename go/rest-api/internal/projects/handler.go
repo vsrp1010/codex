@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,18 +54,23 @@ type errorResponse struct {
 // is injected so the HTTP layer does not rely on a process working directory.
 func NewHandler(repositoryRoot string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		projectList, err := list(repositoryRoot)
+		projectList, err := List(repositoryRoot)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "unable to list projects"})
 			return
 		}
 
-		writeJSON(w, http.StatusOK, response{Projects: projectList})
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		// Project data contains only simple exported structs, so writing to an
+		// http.ResponseWriter cannot fail in a meaningful way for this handler.
+		_ = WriteListJSON(w, projectList)
 	})
 }
 
-// list returns direct child directories that have a web or Go project entry file.
-func list(repositoryRoot string) ([]Project, error) {
+// List returns direct child directories that have a web or Go project entry
+// file, including any optional metadata from project.json.
+func List(repositoryRoot string) ([]Project, error) {
 	entries, err := os.ReadDir(repositoryRoot)
 	if err != nil {
 		return nil, err
@@ -109,6 +115,12 @@ func list(repositoryRoot string) ([]Project, error) {
 
 	sort.Slice(projects, func(i, j int) bool { return projects[i].Name < projects[j].Name })
 	return projects, nil
+}
+
+// WriteListJSON encodes project information in the same response shape used by
+// the projects API. It is shared by non-HTTP consumers such as static exports.
+func WriteListJSON(w io.Writer, projectList []Project) error {
+	return json.NewEncoder(w).Encode(response{Projects: projectList})
 }
 
 func readMetadata(directory string) (projectMetadata, bool, error) {

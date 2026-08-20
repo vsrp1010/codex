@@ -9,5 +9,6 @@
         "Canvas"
     ],
     "featured": true,
-    "status": "active"
+    "status": "active",
+    "image": "assets/preview.jpg"
 }
