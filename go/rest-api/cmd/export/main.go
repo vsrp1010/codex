@@ -22,24 +22,53 @@ func main() {
 		fail("list projects", err)
 	}
 
-	outputPath := filepath.Join(repositoryRoot, "docs", "projects.json")
-	if err := writeProjectList(outputPath, projectList); err != nil {
-		fail("write projects export", err)
+	outputDirectory := filepath.Join(repositoryRoot, "docs")
+	if err := exportDashboard(outputDirectory, projectList); err != nil {
+		fail("export dashboard", err)
 	}
 }
 
-func writeProjectList(outputPath string, projectList []projects.Project) error {
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+// exportDashboard creates the complete static site in a temporary directory
+// before replacing the previous export. CopyFS preserves the full web/ tree,
+// including assets added by future dashboard changes.
+func exportDashboard(outputDirectory string, projectList []projects.Project) error {
+	temporaryDirectory, err := os.MkdirTemp(filepath.Dir(outputDirectory), ".docs-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temporaryDirectory)
+
+	if err := os.CopyFS(temporaryDirectory, os.DirFS("web")); err != nil {
+		return err
+	}
+	if err := writeProjectList(filepath.Join(temporaryDirectory, "projects.json"), projectList); err != nil {
+		return err
+	}
+	if err := writeStaticConfig(filepath.Join(temporaryDirectory, "config.js")); err != nil {
 		return err
 	}
 
+	if err := os.RemoveAll(outputDirectory); err != nil {
+		return err
+	}
+	return os.Rename(temporaryDirectory, outputDirectory)
+}
+
+func writeProjectList(outputPath string, projectList []projects.Project) error {
 	output, err := os.Create(outputPath)
 	if err != nil {
 		return err
 	}
-	defer output.Close()
+	if err := projects.WriteListJSON(output, projectList); err != nil {
+		_ = output.Close()
+		return err
+	}
+	return output.Close()
+}
 
-	return projects.WriteListJSON(output, projectList)
+func writeStaticConfig(outputPath string) error {
+	const staticConfig = "window.codexDashboardConfig = { projectsURL: \"./projects.json\" };\n"
+	return os.WriteFile(outputPath, []byte(staticConfig), 0o644)
 }
 
 func fail(operation string, err error) {

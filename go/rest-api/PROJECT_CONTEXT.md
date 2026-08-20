@@ -103,9 +103,13 @@ rest-api/
 ├── main.go
 ├── README.md
 ├── PROJECT_CONTEXT.md
+├── cmd/
+│   └── export/
+│       └── main.go
 ├── web/
 │   ├── index.html
 │   ├── app.js
+│   ├── config.js
 │   └── style.css
 └── internal/
     ├── health/
@@ -168,6 +172,26 @@ GET /api/projects
 ```
 
 and dynamically render available projects.
+
+`web/config.js` selects the data source. Development uses `/api/projects`,
+while the export command generates a static configuration that uses
+`./projects.json`.
+
+### Static Dashboard Export
+
+```
+go run ./cmd/export
+```
+
+The standalone exporter writes a GitHub Pages-ready dashboard to:
+
+```
+codex/docs/
+```
+
+It recursively copies `web/`, writes the project API response to
+`projects.json`, and switches only the generated frontend configuration to the
+static data file. Project directories are not exported.
 
 ---
 
@@ -419,6 +443,7 @@ Completed:
 * Safe project file serving implemented
 * Optional project metadata support implemented
 * API and handler tests added
+* Static GitHub Pages dashboard export implemented
 
 Next likely milestones:
 
