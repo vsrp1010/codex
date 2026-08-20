@@ -15,7 +15,9 @@ The application provides:
 * metadata-driven project descriptions
 * controlled launching/serving of projects from the parent repository
 
-The project intentionally uses a Go-served frontend rather than a separate frontend framework.
+The project intentionally uses a lightweight vanilla JavaScript frontend.
+During development it is served by Go, while production deployment uses a
+static GitHub Pages export.
 
 ---
 
@@ -165,17 +167,18 @@ The root route serves the browser dashboard from:
 web/
 ```
 
-The dashboard uses vanilla JavaScript to call:
 
-```
-GET /api/projects
-```
+The dashboard uses vanilla JavaScript to load project metadata and dynamically
+render project cards.
 
-and dynamically render available projects.
+`web/config.js` selects the data source:
 
-`web/config.js` selects the data source. Development uses `/api/projects`,
-while the export command generates a static configuration that uses
-`./projects.json`.
+* Development uses `/api/projects`.
+* The static export generates a configuration using `./projects.json`.
+
+The same frontend code supports both the Go-served development environment and
+the GitHub Pages static deployment.
+
 
 ### Static Dashboard Export
 
@@ -195,6 +198,20 @@ static data file. Each discovered launchable project is copied beneath
 `docs/projects/`, excluding common development artifacts. The export is built
 in a temporary directory before replacing the previous output, so stale files
 are removed on every run.
+
+### GitHub Pages Deployment
+
+The public dashboard is deployed using GitHub Pages from the generated
+`docs/` directory.
+
+The publishing workflow is:
+
+```bash
+./scripts/publish.sh
+git add docs/
+git commit
+git push
+```
 
 ---
 
@@ -297,9 +314,8 @@ Projects without metadata continue to work using fallback values derived from:
 
 This allows incremental migration of existing projects.
 
-Preview images are exposed only through the protected project route, not as
-filesystem paths. Projects without metadata receive empty image/technologies/
-status values and `false` for featured.
+In the Go-served development environment, preview images are exposed through the protected project route. During static export, project assets are copied into the GitHub Pages output so preview images remain available. 
+Projects without metadata receive empty image/technologies/status values and `false` for featured.
 
 ---
 
@@ -400,14 +416,14 @@ Avoid:
 Primary development tools:
 
 * VS Code
-* Codex plugin for code generation
 * ChatGPT for architecture discussions and planning
+* VS Code coding assistants (Codex/Copilot) for implementation
 
 Workflow:
 
 1. Discuss architecture and design decisions.
 2. Update PROJECT_CONTEXT.md after meaningful decisions.
-3. Use Codex to implement approved changes.
+3. Use VS Code coding assistants to implement approved changes.
 4. Run tests locally.
 5. Update documentation/context as the project evolves.
 
@@ -428,17 +444,17 @@ changes, then commit and push them manually when ready.
 
 Possible future capabilities:
 
-* richer project metadata
-* project categories and filtering
-* project screenshots/previews
-* AI experiment launcher
-* dashboard improvements
+* dashboard UI improvements
+* featured project sections
+* search and filtering by category or technology
+* richer project presentation
+* AI-powered project discovery
 * API integrations
 * authentication if needed
 * richer frontend only if complexity requires it
 
-The project should continue evolving as a lightweight Go-powered platform for launching and exploring AI experiments.
-
+The project should continue evolving as a lightweight Go-powered platform for
+launching and exploring AI experiments.
 ---
 
 ## Current Development Status
@@ -458,13 +474,16 @@ Completed:
 * Optional project metadata support implemented
 * API and handler tests added
 * Static GitHub Pages dashboard export implemented
+* Exported project assets copied for static deployment
+* GitHub Pages deployment configured
+* Publish workflow automated through `scripts/publish.sh`
 
 Next likely milestones:
 
-1. Improve dashboard UI/UX.
-2. Add richer project metadata.
-3. Add project images/previews.
-4. Add project status information.
+1. Improve dashboard UI/UX using existing metadata.
+2. Add featured project presentation.
+3. Add search and filtering capabilities.
+4. Improve project cards and visual presentation.
 5. Add AI-specific capabilities.
 
 ---
