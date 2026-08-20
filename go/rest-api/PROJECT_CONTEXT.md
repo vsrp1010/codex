@@ -411,6 +411,17 @@ Workflow:
 4. Run tests locally.
 5. Update documentation/context as the project evolves.
 
+To test and regenerate the GitHub Pages site locally, run this from the
+repository root:
+
+```bash
+./scripts/publish.sh
+```
+
+The helper runs `go test ./...` and `go run ./cmd/export` from `go/rest-api`.
+It does not create commits or push changes. Review the generated `docs/`
+changes, then commit and push them manually when ready.
+
 ---
 
 ## Planned Evolution
