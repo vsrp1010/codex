@@ -1,33 +1,47 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A dashboard for projects in the codex repository.">
-    <title>Codex Projects</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="config.js"></script>
-    <script src="app.js" defer></script>
-  </head>
-  <body>
-    <main class="page-shell">
-      <header class="hero">
-        <p class="eyebrow">Codex · Experiment launcher</p>
-        <h1>Choose your next<br><span>experiment.</span></h1>
-        <p class="intro">A launchpad for interactive AI experiments, simulations, and browser projects in this workspace.</p>
-      </header>
 
-      <section class="launcher" aria-labelledby="projects-heading">
-        <div class="section-heading">
-          <div>
-            <p class="section-label">Launcher</p>
-            <h2 id="projects-heading">Available projects</h2>
-          </div>
-          <p id="project-count" aria-live="polite"></p>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A dashboard for projects in the codex repository.">
+  <title>Codex Projects</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <main class="page-shell">
+    <header class="hero">
+      <p class="eyebrow">Codex · Experiment launcher</p>
+      <h1>Choose your next<br><span>experiment.</span></h1>
+      <p class="intro">A launchpad for interactive AI experiments, simulations, and browser projects in this workspace.
+      </p>
+    </header>
+
+    <section id="featured-section" class="launcher" aria-labelledby="featured-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <p class="section-label">Highlights</p>
+          <h2 id="featured-heading">Featured Projects</h2>
         </div>
-        <p id="status" class="status" role="status" aria-live="polite">Loading projects…</p>
-        <div id="project-list" class="project-list" hidden></div>
-      </section>
-    </main>
-  </body>
+      </div>
+      <div id="featured-list" class="project-list"></div>
+    </section>
+
+    <section class="launcher" aria-labelledby="projects-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-label">Launcher</p>
+          <h2 id="projects-heading">Available projects</h2>
+        </div>
+        <p id="project-count" aria-live="polite"></p>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite">Loading projects…</p>
+      <div id="project-list" class="project-list" hidden></div>
+    </section>
+  </main>
+</body>
+
 </html>

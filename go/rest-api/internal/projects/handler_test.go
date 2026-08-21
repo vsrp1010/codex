@@ -14,6 +14,7 @@ func TestNewHandlerUsesFallbackWithoutMetadata(t *testing.T) {
 	repositoryRoot := t.TempDir()
 	createProjectFile(t, repositoryRoot, "zeta", "index.html")
 	createProjectFile(t, repositoryRoot, "alpha", "go.mod")
+	createProjectFile(t, repositoryRoot, "docs", "index.html")
 	createProjectFile(t, repositoryRoot, "not-a-project", "README.md")
 	createProjectFile(t, repositoryRoot, ".private", "index.html")
 

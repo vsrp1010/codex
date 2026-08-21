@@ -1,3 +1,5 @@
+const featuredSection = document.querySelector("#featured-section");
+const featuredList = document.querySelector("#featured-list");
 const projectList = document.querySelector("#project-list");
 const projectCount = document.querySelector("#project-count");
 const status = document.querySelector("#status");
@@ -21,6 +23,15 @@ async function loadProjects() {
 }
 
 function renderProjects(projects) {
+  const featuredProjects = projects.filter((project) => project.featured === true);
+  featuredSection.hidden = featuredProjects.length === 0;
+  if (featuredProjects.length > 0) {
+    featuredSection.hidden = false;
+    renderProjectCards(featuredProjects, featuredList);
+  } else {
+    featuredSection.hidden = true;
+  }
+
   status.hidden = true;
   projectList.hidden = false;
   projectCount.textContent = `${projects.length} ${projects.length === 1 ? "project" : "projects"}`;
@@ -30,13 +41,17 @@ function renderProjects(projects) {
     return;
   }
 
+  renderProjectCards(projects, projectList);
+}
+
+function renderProjectCards(projects, container) {
   const fragment = document.createDocumentFragment();
   for (const project of projects) {
     const card = document.createElement("article");
     card.className = "project-card";
 
     const preview = createPreview(project);
-    if (project.featured) {
+    if (project.featured === true) {
       const featured = document.createElement("span");
       featured.className = "featured-badge";
       featured.textContent = "Featured";
@@ -87,7 +102,7 @@ function renderProjects(projects) {
     card.append(preview, content);
     fragment.append(card);
   }
-  projectList.replaceChildren(fragment);
+  container.replaceChildren(fragment);
 }
 
 function createPreview(project) {

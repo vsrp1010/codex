@@ -78,7 +78,7 @@ func List(repositoryRoot string) ([]Project, error) {
 
 	projects := make([]Project, 0)
 	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name()[0] == '.' {
+		if !entry.IsDir() || entry.Name()[0] == '.' || entry.Name() == "docs" {
 			continue
 		}
 

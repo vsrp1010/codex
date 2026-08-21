@@ -237,6 +237,10 @@ or:
 go.mod
 ```
 
+The generated `docs/` directory is excluded from discovery even though it
+contains an `index.html`, so the development API and static export list only
+real projects.
+
 The API returns:
 
 * project name
