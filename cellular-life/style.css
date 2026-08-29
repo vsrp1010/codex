@@ -130,8 +130,50 @@ body {
   font-size: 1rem;
 }
 
+.world-size-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.world-size-field input {
+  width: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font: inherit;
+}
+
+.world-size-field span {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.color-counts-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin-top: 8px;
+}
+
+.color-count-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.color-count-item .color-dot {
+  flex: none;
+}
+
 .sim-grid {
-  grid-template-columns: 420px minmax(0, 1fr);
+  grid-template-columns: 520px minmax(0, 1fr);
   align-items: start;
 }
 
@@ -336,6 +378,28 @@ textarea {
   transform: none;
 }
 
+.io-section {
+  margin-top: 14px;
+}
+
+.io-section h3 {
+  margin: 0 0 4px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+}
+
+.io-inputs-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.io-button-chip {
+  min-height: 44px;
+  padding: 0 10px;
+}
+
 .matrix-wrap {
   margin-top: 14px;
   max-width: 100%;
@@ -507,12 +571,12 @@ textarea {
 
 .sim-panel {
   position: relative;
+  padding: 10px;
 }
 
 .sim-canvas-wrap {
-  width: 80%;
+  width: 100%;
   max-width: 100%;
-  margin-inline: auto;
 }
 
 .sim-canvas {

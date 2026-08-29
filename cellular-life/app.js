@@ -1,11 +1,13 @@
-const WORLD_SIZE = 400;
-const PARTICLE_RADIUS = 0.9;
+let WORLD_SIZE = 360;
+const WORLD_SIZE_MIN = 40;
+const WORLD_SIZE_MAX = 400;
+const WORLD_SIZE_DEFAULT = 360;
+const PARTICLE_RADIUS = 0.8;
 const SIMULATION_SPEED = 0.5;
 const INTERACTION_RANGE = 52;
 const CLOSE_REPULSION_RANGE = PARTICLE_RADIUS * 3.6;
 const GLOBAL_FRICTION = 0.975;
 const MOVE_TOWARD_FORCE = 3.2;
-const REPEL_FORCE = 2.4;
 const SURROUND_FORCE = 2.6;
 const EAT_FORCE = 4.1;
 const EAT_RADIUS = 2.1;
@@ -19,26 +21,23 @@ const MULTI_SURROUND_INNER_CLEARANCE = PARTICLE_RADIUS * 3.2;
 const MULTI_SURROUND_WALL_PARTICLE_SPACING = PARTICLE_RADIUS * 2.45;
 const MULTI_SURROUND_WALL_SPACING_FORCE = 1.8;
 const MULTI_SURROUND_TARGET_COHESION_FORCE = 1.5;
-const MOVE_TOWARD_NEIGHBOR_COUNT = 2;
 const POSSESSION_MANUAL_FORCE = 4.4;
 const POSSESSION_KILL_RANGE = PARTICLE_RADIUS * 3.2;
 const MATRIX_INTERACTION_RANGE = INTERACTION_RANGE;
 const MATRIX_CLOSE_RANGE_FRACTION = 0.045;
 const MATRIX_FORCE = 3;
 const MATRIX_MAX_SPEED = 4.5;
-const MOVEMENT_ACTIONS = new Set(["moveToward", "moveAway", "surround", "eat"]);
+const MOVEMENT_ACTIONS = new Set(["moveToward", "surround", "eat"]);
 const ACTION_OPTIONS = [
   { value: "moveToward", label: "move toward" },
-  { value: "moveAway", label: "move away" },
   { value: "surround", label: "surround" },
   { value: "eat", label: "eat (kill)" },
   { value: "spawn", label: "spawn (make copy of self)" },
 ];
-const STRENGTH_OPTIONS = [
-  { value: "weakly", label: "weakly", multiplier: 0.6 },
-  { value: "moderately", label: "moderately", multiplier: 1 },
-  { value: "strongly", label: "strongly", multiplier: 1.5 },
-];
+const STRENGTH_MIN = -1;
+const STRENGTH_MAX = 1;
+const STRENGTH_STEP = 0.1;
+const STRENGTH_DEFAULT = 1;
 const COLORS = [
   { value: "red", label: "Red", fill: "#ff4a4a" },
   { value: "orange", label: "Orange", fill: "#ff9b42" },
@@ -51,10 +50,19 @@ const COLORS = [
   { value: "white", label: "White", fill: "#f4f4ef" },
 ];
 const CONDITION_TYPE_OPTIONS = [
-  { value: "buttonPressed", label: "button pressed" },
+  { value: "buttonPressed", label: "button # pressed" },
+  { value: "buttonReleased", label: "button # released" },
+  { value: "switchOn", label: "switch # on" },
+  { value: "switchOff", label: "switch # off" },
   { value: "nearColor", label: "near particle of color" },
   { value: "touching", label: "touching" },
 ];
+const IO_CONDITION_TYPES = new Set(["buttonPressed", "buttonReleased", "switchOn", "switchOff"]);
+const IO_COUNT = 8;
+const IO_NUMBER_OPTIONS = Array.from({ length: IO_COUNT }, (_, index) => {
+  const number = String(index + 1);
+  return { value: number, label: number };
+});
 const CONDITION_OPERATOR_OPTIONS = [
   { value: "and", label: "AND" },
   { value: "or", label: "OR" },
@@ -63,7 +71,8 @@ const CONDITION_OPERATOR_OPTIONS = [
 const refs = {
   addScriptBtn: document.getElementById("addScriptBtn"),
   scriptsList: document.getElementById("scriptsList"),
-  scriptSignalBtn: document.getElementById("scriptSignalBtn"),
+  buttonInputsList: document.getElementById("buttonInputsList"),
+  switchInputsList: document.getElementById("switchInputsList"),
   exportCodeBtn: document.getElementById("exportCodeBtn"),
   importCodeBtn: document.getElementById("importCodeBtn"),
   importCodeInput: document.getElementById("importCodeInput"),
@@ -89,6 +98,9 @@ const refs = {
   selectedParticle: document.getElementById("selectedParticle"),
   selfTestOutput: document.getElementById("selfTestOutput"),
   matrixActiveNotice: document.getElementById("matrixActiveNotice"),
+  worldSizeInput: document.getElementById("worldSizeInput"),
+  worldSizeLabel: document.getElementById("worldSizeLabel"),
+  colorCountsList: document.getElementById("colorCountsList"),
 };
 
 const state = {
@@ -96,7 +108,8 @@ const state = {
   renderScale: 1,
   particles: [],
   scripts: [],
-  scriptButtonPressed: false,
+  buttons: Object.fromEntries(Array.from({ length: IO_COUNT }, (_, index) => [index + 1, false])),
+  switches: Object.fromEntries(Array.from({ length: IO_COUNT }, (_, index) => [index + 1, false])),
   resetCounts: {
     red: 1,
     orange: 0,
@@ -129,6 +142,7 @@ initialize();
 
 function initialize() {
   applyQueryConfig();
+  setWorldSize(WORLD_SIZE);
   state.ctx = setupCanvasContext(refs.worldCanvas, WORLD_SIZE, WORLD_SIZE);
   state.matrixInputsGrid = buildMatrixInputsGrid();
   state.useMatrix = Boolean(refs.useMatrixToggle?.checked);
@@ -137,6 +151,8 @@ function initialize() {
   bindEvents();
   renderScripts();
   renderResetCounts();
+  renderButtonInputs();
+  renderSwitchInputs();
   refs.infoExitFullscreenBtn.hidden = true;
   updateHud();
   maybeRunSelfTest();
@@ -161,6 +177,9 @@ function bindEvents() {
   });
   refs.multiSurroundToggle.addEventListener("change", (event) => {
     state.multiSurround = event.target.checked;
+  });
+  refs.worldSizeInput?.addEventListener("change", (event) => {
+    setWorldSize(event.target.value);
   });
   refs.disableSideWarpToggle?.addEventListener("change", (event) => {
     state.disableSideWarp = event.target.checked;
@@ -189,7 +208,6 @@ function bindEvents() {
   window.addEventListener("keydown", handleKeyDown);
   window.addEventListener("keyup", handleKeyUp);
   window.addEventListener("blur", () => state.pressedKeys.clear());
-  bindScriptSignalButton();
 }
 
 function setupCanvasContext(canvas, width, height) {
@@ -206,12 +224,70 @@ function setupCanvasContext(canvas, width, height) {
   return ctx;
 }
 
+function setWorldSize(rawValue) {
+  const previousSize = WORLD_SIZE;
+  const nextSize = clampInt(rawValue, WORLD_SIZE_MIN, WORLD_SIZE_MAX, WORLD_SIZE);
+
+  if (refs.worldSizeInput) refs.worldSizeInput.value = String(nextSize);
+  if (refs.worldSizeLabel) refs.worldSizeLabel.textContent = `${nextSize} x ${nextSize} square units`;
+
+  if (nextSize === previousSize) return;
+
+  // Rescale existing particles proportionally so their relative layout is preserved
+  // instead of being clamped/wrapped into an arbitrary new spot.
+  const scale = nextSize / previousSize;
+  WORLD_SIZE = nextSize;
+  state.particles.forEach((particle) => {
+    particle.x = placeCoordinate(particle.x * scale);
+    particle.y = placeCoordinate(particle.y * scale);
+  });
+
+  state.ctx = setupCanvasContext(refs.worldCanvas, WORLD_SIZE, WORLD_SIZE);
+}
+
+function renderColorCounts() {
+  if (!refs.colorCountsList) return;
+
+  const counts = {};
+  COLORS.forEach((color) => {
+    counts[color.value] = 0;
+  });
+  state.particles.forEach((particle) => {
+    if (counts[particle.color] !== undefined) counts[particle.color] += 1;
+  });
+
+  if (refs.colorCountsList.childElementCount !== COLORS.length) {
+    refs.colorCountsList.innerHTML = "";
+    COLORS.forEach((color) => {
+      const item = document.createElement("div");
+      item.className = "color-count-item";
+      item.dataset.color = color.value;
+
+      const dot = document.createElement("span");
+      dot.className = `color-dot ${color.value}`;
+
+      const text = document.createElement("span");
+      text.className = "color-count-value";
+      text.textContent = `${color.label}: ${counts[color.value]}`;
+
+      item.append(dot, text);
+      refs.colorCountsList.appendChild(item);
+    });
+    return;
+  }
+
+  COLORS.forEach((color) => {
+    const text = refs.colorCountsList.querySelector(`[data-color="${color.value}"] .color-count-value`);
+    if (text) text.textContent = `${color.label}: ${counts[color.value]}`;
+  });
+}
+
 function createScript() {
   return {
     id: `script-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     sourceColor: "red",
-    action: "moveAway",
-    strength: "moderately",
+    action: "moveToward",
+    strength: STRENGTH_DEFAULT,
     targetColor: "green",
     spawnColor: "red",
     spawnCount: 1,
@@ -300,15 +376,18 @@ function renderScripts() {
     actionField.appendChild(actionSelect);
 
     const strengthField = document.createElement("label");
-    strengthField.textContent = "Strength";
-    const strengthSelect = document.createElement("select");
-    STRENGTH_OPTIONS.forEach((option) => {
-      strengthSelect.appendChild(createOption(option.value, option.label, script.strength || "moderately"));
+    strengthField.textContent = "Strength (-1 to 1)";
+    const strengthInput = document.createElement("input");
+    strengthInput.type = "number";
+    strengthInput.min = String(STRENGTH_MIN);
+    strengthInput.max = String(STRENGTH_MAX);
+    strengthInput.step = String(STRENGTH_STEP);
+    strengthInput.value = String(getScriptStrength(script));
+    strengthInput.addEventListener("change", (event) => {
+      script.strength = clampStrength(event.target.value);
+      strengthInput.value = String(script.strength);
     });
-    strengthSelect.addEventListener("change", (event) => {
-      script.strength = event.target.value;
-    });
-    strengthField.appendChild(strengthSelect);
+    strengthField.appendChild(strengthInput);
 
     const targetField = document.createElement("label");
     targetField.textContent = script.action === "spawn" ? "Spawn color" : "Particle";
@@ -412,6 +491,11 @@ function renderScripts() {
             condition.primaryColor = condition.primaryColor || script.sourceColor || "red";
             condition.secondaryColor = condition.secondaryColor || script.targetColor || "green";
           }
+          if (IO_CONDITION_TYPES.has(condition.type)) {
+            if (!condition.number) condition.number = 1;
+          } else {
+            delete condition.number;
+          }
           if (condition.type !== "touching") {
             delete condition.cooldownSeconds;
           } else if (!Number.isFinite(condition.cooldownSeconds)) {
@@ -439,6 +523,15 @@ function renderScripts() {
             condition.secondaryColor = event.target.value;
           });
           row.appendChild(secondarySelect);
+        } else if (IO_CONDITION_TYPES.has(condition.type)) {
+          const numberSelect = document.createElement("select");
+          IO_NUMBER_OPTIONS.forEach((option) => {
+            numberSelect.appendChild(createOption(option.value, option.label, String(condition.number || 1)));
+          });
+          numberSelect.addEventListener("change", (event) => {
+            condition.number = Number(event.target.value);
+          });
+          row.appendChild(numberSelect);
         }
 
         if (condition.type === "touching") {
@@ -454,9 +547,16 @@ function renderScripts() {
           });
           row.appendChild(cooldownInput);
         } else {
+          const chipTextByType = {
+            nearColor: "Nearby now",
+            buttonPressed: "Pressed now",
+            buttonReleased: "Released now",
+            switchOn: "On now",
+            switchOff: "Off now",
+          };
           const chip = document.createElement("div");
           chip.className = "condition-chip";
-          chip.textContent = condition.type === "nearColor" ? "Nearby now" : "Pressed now";
+          chip.textContent = chipTextByType[condition.type] || "True now";
           row.appendChild(chip);
         }
 
@@ -505,11 +605,11 @@ function renderResetCounts() {
     const input = document.createElement("input");
     input.type = "number";
     input.min = "0";
-    input.max = "100";
+    input.max = "1000";
     input.step = "1";
     input.value = String(state.resetCounts[color.value] || 0);
     input.addEventListener("change", (event) => {
-      state.resetCounts[color.value] = clampInt(event.target.value, 0, 100, 0);
+      state.resetCounts[color.value] = clampInt(event.target.value, 0, 1000, 0);
       input.value = String(state.resetCounts[color.value]);
     });
 
@@ -579,7 +679,28 @@ function updateSimulation(deltaSeconds) {
   resolveParticleCollisions();
   applyEatActions();
   applySpawnActions();
+  sanitizeParticlePositions();
   updateHud();
+}
+
+// Safety net: guarantees every particle stays at a finite, in-bounds position no
+// matter what force calculation produced it. Without this, a single bad value
+// (e.g. from an exact-overlap edge case) could silently push a particle far off
+// the visible canvas forever, making the sim look "broken" until a reload.
+function sanitizeParticlePositions() {
+  state.particles.forEach((particle) => {
+    if (!Number.isFinite(particle.x) || !Number.isFinite(particle.y)) {
+      particle.x = WORLD_SIZE / 2;
+      particle.y = WORLD_SIZE / 2;
+      particle.vx = 0;
+      particle.vy = 0;
+      return;
+    }
+    if (!Number.isFinite(particle.vx)) particle.vx = 0;
+    if (!Number.isFinite(particle.vy)) particle.vy = 0;
+    particle.x = placeCoordinate(particle.x);
+    particle.y = placeCoordinate(particle.y);
+  });
 }
 
 function applyScriptForces(forces) {
@@ -590,46 +711,19 @@ function applyScriptForces(forces) {
 
     if (script.action === "surround") {
       if (targets.length === 0) return;
-      applySurroundForces(forces, sources, targets, getStrengthMultiplier(script.strength), script);
+      applySurroundForces(forces, sources, targets, getScriptStrength(script), script);
       return;
     }
 
     sources.forEach((source) => {
       if (!isScriptMovementEnabledForParticle(script, source)) return;
       if (!evaluateScriptConditions(script, source)) return;
-      const strengthMultiplier = getStrengthMultiplier(script.strength);
+      const strengthValue = getScriptStrength(script);
 
+      // `moveToward` uses the same distance-vs-force curve as the matrix: positive
+      // strength attracts, negative strength repels (replacing the old `move away` action),
+      // and every particle within range contributes its own pull/push, just like the matrix.
       if (script.action === "moveToward") {
-        if (targets.length === 0) return;
-        const neighbors = findNearestTargetsInRange(source, targets, INTERACTION_RANGE, MOVE_TOWARD_NEIGHBOR_COUNT);
-        if (neighbors.length === 0) return;
-
-        let sumX = 0;
-        let sumY = 0;
-        let totalWeight = 0;
-
-        neighbors.forEach((neighbor) => {
-          const curve = getInteractionCurve(neighbor.distance);
-          if (curve === 0) return;
-          const weight = curve * (1.15 - neighbor.distance / INTERACTION_RANGE);
-          sumX += (neighbor.dx / neighbor.distance) * weight;
-          sumY += (neighbor.dy / neighbor.distance) * weight;
-          totalWeight += weight;
-        });
-
-        if (totalWeight <= 0) return;
-        const length = Math.hypot(sumX, sumY) || 1;
-        addForce(
-          forces,
-          source.id,
-          sumX / length,
-          sumY / length,
-          MOVE_TOWARD_FORCE * strengthMultiplier * (totalWeight / neighbors.length)
-        );
-        return;
-      }
-
-      if (script.action === "moveAway") {
         if (targets.length === 0) return;
         targets.forEach((target) => {
           if (target.id === source.id) return;
@@ -637,16 +731,10 @@ function applyScriptForces(forces) {
           const distance = Math.hypot(offset.dx, offset.dy);
           if (distance === 0 || distance > INTERACTION_RANGE) return;
 
-          const curve = getRepelInteractionCurve(distance);
-          if (curve === 0) return;
-          // `move away` is one-way: only the source particle is affected by this rule.
-          addForce(
-            forces,
-            source.id,
-            -offset.dx / distance,
-            -offset.dy / distance,
-            REPEL_FORCE * strengthMultiplier * curve
-          );
+          const normalizedDistance = distance / INTERACTION_RANGE;
+          const magnitude = getMatrixForceMagnitude(normalizedDistance, strengthValue);
+          if (magnitude === 0) return;
+          addForce(forces, source.id, offset.dx / distance, offset.dy / distance, magnitude * MOVE_TOWARD_FORCE);
         });
         return;
       }
@@ -655,14 +743,15 @@ function applyScriptForces(forces) {
         if (targets.length === 0) return;
         const nearest = findNearestTargetsInRange(source, targets, INTERACTION_RANGE, 1)[0];
         if (!nearest) return;
-        const curve = getInteractionCurve(nearest.distance);
-        if (curve === 0) return;
+        const normalizedDistance = nearest.distance / INTERACTION_RANGE;
+        const magnitude = getMatrixForceMagnitude(normalizedDistance, strengthValue);
+        if (magnitude === 0) return;
         addForce(
           forces,
           source.id,
           nearest.dx / nearest.distance,
           nearest.dy / nearest.distance,
-          EAT_FORCE * strengthMultiplier * Math.max(curve, 0.45)
+          magnitude * EAT_FORCE
         );
         return;
       }
@@ -674,9 +763,9 @@ function applyScriptForces(forces) {
   });
 }
 
-function applySurroundForces(forces, sources, targets, strengthMultiplier, script) {
+function applySurroundForces(forces, sources, targets, strengthValue, script) {
   if (state.multiSurround) {
-    applyMultiSurroundForces(forces, sources, targets, strengthMultiplier, script);
+    applyMultiSurroundForces(forces, sources, targets, strengthValue, script);
     return;
   }
 
@@ -709,16 +798,20 @@ function applySurroundForces(forces, sources, targets, strengthMultiplier, scrip
       const distance = Math.hypot(offset.dx, offset.dy);
       if (distance === 0) return;
 
-      const magnitude = SURROUND_FORCE * strengthMultiplier * Math.min(distance / SURROUND_RADIUS, 1.4);
+      // Same distance-vs-force curve as the matrix, normalized over the interaction range.
+      const normalizedDistance = distance / INTERACTION_RANGE;
+      const magnitude = SURROUND_FORCE * getMatrixForceMagnitude(normalizedDistance, strengthValue);
+      if (magnitude === 0) return;
       addForce(forces, source.id, offset.dx / distance, offset.dy / distance, magnitude);
     });
   });
 }
 
-function applyMultiSurroundForces(forces, sources, targets, strengthMultiplier, script) {
+function applyMultiSurroundForces(forces, sources, targets, strengthValue, script) {
   const targetGroups = buildSurroundTargetGroups(targets);
   const groups = new Map();
   const limit = getSurroundLimit(state.maxSurroundPerGroup);
+  const structuralScale = getStrengthScale(strengthValue);
 
   sources.forEach((source) => {
     if (!isScriptMovementEnabledForParticle(script, source)) return;
@@ -732,7 +825,7 @@ function applyMultiSurroundForces(forces, sources, targets, strengthMultiplier, 
   });
 
   groups.forEach(({ targetGroup, sources: groupedSources }) => {
-    applyMultiSurroundTargetCohesion(forces, targetGroup, strengthMultiplier);
+    applyMultiSurroundTargetCohesion(forces, targetGroup, structuralScale);
 
     const orderedSources = [...groupedSources].sort((a, b) => {
       return getWrappedPolar(targetGroup, a).angle - getWrappedPolar(targetGroup, b).angle;
@@ -743,10 +836,10 @@ function applyMultiSurroundForces(forces, sources, targets, strengthMultiplier, 
 
     orderedSources.forEach((source, index) => {
       const angle = baseAngle + (Math.PI * 2 * index) / Math.max(count, 1);
-      applyMultiSurroundWallForce(forces, source, targetGroup, angle, surroundRadius, strengthMultiplier);
+      applyMultiSurroundWallForce(forces, source, targetGroup, angle, surroundRadius, strengthValue, structuralScale);
     });
 
-    applyMultiSurroundWallSpacing(forces, orderedSources, surroundRadius, strengthMultiplier);
+    applyMultiSurroundWallSpacing(forces, orderedSources, surroundRadius, structuralScale);
   });
 }
 
@@ -787,7 +880,7 @@ function getMultiSurroundRadius(targetGroup, sourceCount) {
   return Math.max(MULTI_SURROUND_MIN_RADIUS, targetRadius, wallCapacityRadius);
 }
 
-function applyMultiSurroundTargetCohesion(forces, targetGroup, strengthMultiplier) {
+function applyMultiSurroundTargetCohesion(forces, targetGroup, structuralScale) {
   if (targetGroup.members.length < 2) return;
 
   targetGroup.members.forEach((target) => {
@@ -797,13 +890,13 @@ function applyMultiSurroundTargetCohesion(forces, targetGroup, strengthMultiplie
 
     const magnitude =
       MULTI_SURROUND_TARGET_COHESION_FORCE *
-      strengthMultiplier *
+      structuralScale *
       Math.min(distance / SURROUND_RADIUS, 1.4);
     addForce(forces, target.id, offset.dx / distance, offset.dy / distance, magnitude);
   });
 }
 
-function applyMultiSurroundWallForce(forces, source, targetGroup, slotAngle, surroundRadius, strengthMultiplier) {
+function applyMultiSurroundWallForce(forces, source, targetGroup, slotAngle, surroundRadius, strengthValue, structuralScale) {
   const polar = getWrappedPolar(targetGroup, source);
   const sourceAngle = polar.radius === 0 ? slotAngle : polar.angle;
   const ux = Math.cos(sourceAngle);
@@ -811,9 +904,9 @@ function applyMultiSurroundWallForce(forces, source, targetGroup, slotAngle, sur
   const innerClearance = targetGroup.radius + MULTI_SURROUND_INNER_CLEARANCE;
   if (polar.radius < innerClearance) {
     const clearanceMagnitude =
-      SURROUND_FORCE * strengthMultiplier * Math.min((innerClearance - polar.radius) / PARTICLE_RADIUS, 1.4);
+      SURROUND_FORCE * structuralScale * Math.min((innerClearance - polar.radius) / PARTICLE_RADIUS, 1.4);
     addForce(forces, source.id, ux, uy, clearanceMagnitude);
-    applyMultiSurroundTangentForce(forces, source, sourceAngle, slotAngle, polar.radius, surroundRadius, strengthMultiplier);
+    applyMultiSurroundTangentForce(forces, source, sourceAngle, slotAngle, polar.radius, surroundRadius, structuralScale);
     return;
   }
 
@@ -825,7 +918,10 @@ function applyMultiSurroundWallForce(forces, source, targetGroup, slotAngle, sur
   const distance = Math.hypot(offset.dx, offset.dy);
   if (distance === 0) return;
 
-  const magnitude = SURROUND_FORCE * strengthMultiplier * Math.min(distance / SURROUND_RADIUS, 1.4);
+  // Same distance-vs-force curve as the matrix, normalized over the interaction range.
+  const normalizedDistance = distance / INTERACTION_RANGE;
+  const magnitude = SURROUND_FORCE * getMatrixForceMagnitude(normalizedDistance, strengthValue);
+  if (magnitude === 0) return;
   addForce(forces, source.id, offset.dx / distance, offset.dy / distance, magnitude);
 }
 
@@ -836,12 +932,12 @@ function applyMultiSurroundTangentForce(
   slotAngle,
   sourceRadius,
   surroundRadius,
-  strengthMultiplier
+  structuralScale
 ) {
   const angleDelta = getSignedAngleDelta(sourceAngle, slotAngle);
   const tangentDistance = Math.abs(angleDelta) * Math.max(sourceRadius, surroundRadius * 0.4);
   const tangentMagnitude =
-    SURROUND_FORCE * strengthMultiplier * Math.min(tangentDistance / SURROUND_RADIUS, 1.4);
+    SURROUND_FORCE * structuralScale * Math.min(tangentDistance / SURROUND_RADIUS, 1.4);
 
   if (tangentMagnitude === 0) return;
   const ux = Math.cos(sourceAngle);
@@ -850,7 +946,7 @@ function applyMultiSurroundTangentForce(
   addForce(forces, source.id, -uy * tangentDirection, ux * tangentDirection, tangentMagnitude);
 }
 
-function applyMultiSurroundWallSpacing(forces, sources, surroundRadius, strengthMultiplier) {
+function applyMultiSurroundWallSpacing(forces, sources, surroundRadius, structuralScale) {
   if (sources.length < 2) return;
 
   const desiredSpacing = Math.max(PARTICLE_RADIUS * 2.1, (Math.PI * 2 * surroundRadius) / sources.length);
@@ -865,7 +961,7 @@ function applyMultiSurroundWallSpacing(forces, sources, surroundRadius, strength
 
       const magnitude =
         MULTI_SURROUND_WALL_SPACING_FORCE *
-        strengthMultiplier *
+        structuralScale *
         Math.min((desiredSpacing - distance) / desiredSpacing, 1);
       addForce(forces, source.id, -offset.dx / distance, -offset.dy / distance, magnitude);
       addForce(forces, other.id, offset.dx / distance, offset.dy / distance, magnitude);
@@ -1005,9 +1101,8 @@ function getSignedAngleDelta(fromAngle, toAngle) {
 }
 
 function wrapCoordinate(value) {
-  if (value < 0) return value + WORLD_SIZE;
-  if (value >= WORLD_SIZE) return value - WORLD_SIZE;
-  return value;
+  const remainder = value % WORLD_SIZE;
+  return remainder < 0 ? remainder + WORLD_SIZE : remainder;
 }
 
 function boundCoordinate(value) {
@@ -1059,18 +1154,22 @@ function resolveParticleCollisions() {
     for (let otherIndex = index + 1; otherIndex < state.particles.length; otherIndex += 1) {
       const b = state.particles[otherIndex];
       const offset = getWrappedOffset(a, b);
-      let distance = Math.hypot(offset.dx, offset.dy);
+      const distance = Math.hypot(offset.dx, offset.dy);
 
       if (distance >= minDistance) continue;
 
+      let nx;
+      let ny;
       if (distance === 0) {
-        distance = 0.0001;
-        offset.dx = minDistance;
-        offset.dy = 0;
+        // Exact overlap: push apart along a fixed axis instead of dividing by a
+        // near-zero distance, which previously produced a huge, corrupting displacement.
+        nx = 1;
+        ny = 0;
+      } else {
+        nx = offset.dx / distance;
+        ny = offset.dy / distance;
       }
 
-      const nx = offset.dx / distance;
-      const ny = offset.dy / distance;
       const overlap = minDistance - distance;
 
       a.x = placeCoordinate(a.x - nx * overlap * 0.5);
@@ -1473,8 +1572,8 @@ function describeScript(script) {
   const source = capitalize(script.sourceColor);
   const target = capitalize(script.targetColor || script.spawnColor || script.sourceColor);
   const action = ACTION_OPTIONS.find((option) => option.value === script.action)?.label || script.action;
-  const strength = STRENGTH_OPTIONS.find((option) => option.value === (script.strength || "moderately"))?.label || "moderately";
-  return `${source} ${action} ${target} ${strength}`;
+  const strength = getScriptStrength(script);
+  return `${source} ${action} ${target} (strength ${strength})`;
 }
 
 function updateHud() {
@@ -1482,6 +1581,7 @@ function updateHud() {
   refs.scriptCount.textContent = String(state.scripts.length);
   refs.playState.textContent = state.paused ? "Pause" : "Play";
   refs.pauseBtn.textContent = state.paused ? "Play" : "Pause";
+  renderColorCounts();
 }
 
 function togglePause() {
@@ -1558,7 +1658,7 @@ function maybeRunSelfTest() {
     scripts: state.scripts.map((script) => ({
       sourceColor: script.sourceColor,
       action: script.action,
-      strength: script.strength || "moderately",
+      strength: getScriptStrength(script),
       targetColor: script.targetColor,
       conditions: (script.conditions || []).map((condition) => ({ ...condition })),
     })),
@@ -1742,6 +1842,9 @@ function runPossessionKillSelfTest() {
 
 function applyQueryConfig() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has("worldSize")) {
+    WORLD_SIZE = clampInt(params.get("worldSize"), WORLD_SIZE_MIN, WORLD_SIZE_MAX, WORLD_SIZE);
+  }
   state.multiSurround = params.get("multiSurround") === "1";
   refs.multiSurroundToggle.checked = state.multiSurround;
   state.disableSideWarp = params.get("disableSideWarp") === "1";
@@ -1754,7 +1857,7 @@ function applyQueryConfig() {
   COLORS.forEach((color) => {
     const raw = params.get(color.value);
     if (raw === null) return;
-    state.resetCounts[color.value] = clampInt(raw, 0, 100, state.resetCounts[color.value] || 0);
+    state.resetCounts[color.value] = clampInt(raw, 0, 1000, state.resetCounts[color.value] || 0);
   });
 
   const scripts = [];
@@ -1769,9 +1872,7 @@ function applyQueryConfig() {
       id: `query-script-${index}`,
       sourceColor,
       action,
-      strength: STRENGTH_OPTIONS.some((option) => option.value === params.get(`strength${index}`))
-        ? params.get(`strength${index}`)
-        : "moderately",
+      strength: params.has(`strength${index}`) ? clampStrength(params.get(`strength${index}`)) : STRENGTH_DEFAULT,
       targetColor,
       conditions: [],
     });
@@ -1827,8 +1928,28 @@ function randomFloat(min, max) {
   return min + Math.random() * (max - min);
 }
 
-function getStrengthMultiplier(strength) {
-  return STRENGTH_OPTIONS.find((option) => option.value === strength)?.multiplier || 1;
+function clampStrength(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return STRENGTH_DEFAULT;
+  return Math.round(clamp(number, STRENGTH_MIN, STRENGTH_MAX) * 10) / 10;
+}
+
+function getScriptStrength(script) {
+  return clampStrength(script.strength ?? STRENGTH_DEFAULT);
+}
+
+// Structural (non-directional) forces such as collision clearance, wall spacing, and
+// target cohesion should always push/pull the way they're supposed to regardless of
+// sign, so they use the magnitude of the strength rather than the signed value.
+function getStrengthScale(strengthValue) {
+  return Math.max(0.2, Math.abs(strengthValue));
+}
+
+// Cooldown timers aren't a distance-based force, so they use a simple positive multiplier
+// derived from strength: 0 behaves like the old "moderate" default, +1 is twice as fast,
+// -1 is slowed to a crawl (never fully zero, to avoid divide-by-zero).
+function getStrengthCooldownMultiplier(script) {
+  return Math.max(0.15, 1 + getScriptStrength(script));
 }
 
 function exportConfigCode() {
@@ -1838,8 +1959,9 @@ function exportConfigCode() {
 }
 
 function encodeConfigCode() {
-  const countsPart = COLORS.map((color) => `${color.value}:${clampInt(state.resetCounts[color.value] || 0, 0, 100, 0)}`).join(",");
+  const countsPart = COLORS.map((color) => `${color.value}:${clampInt(state.resetCounts[color.value] || 0, 0, 1000, 0)}`).join(",");
   const optionsPart = [
+    `worldSize:${WORLD_SIZE}`,
     `multiSurround:${state.multiSurround ? 1 : 0}`,
     `disableSideWarp:${state.disableSideWarp ? 1 : 0}`,
     `maxPerParticle:${clampInt(state.maxSurroundPerParticle, 0, MAX_PARTICLES, 0)}`,
@@ -1853,6 +1975,7 @@ function encodeConfigCode() {
             `op:${condition.operator || "and"}`,
             `not:${condition.negated ? 1 : 0}`,
             `type:${condition.type || "buttonPressed"}`,
+            `num:${condition.number ?? ""}`,
             `color:${condition.color || ""}`,
             `cool:${condition.cooldownSeconds ?? 0}`,
           ].join("&")
@@ -1862,7 +1985,7 @@ function encodeConfigCode() {
       return [
         `src:${script.sourceColor}`,
         `act:${script.action}`,
-        `str:${script.strength || "moderately"}`,
+        `str:${getScriptStrength(script)}`,
         `tgt:${script.targetColor || ""}`,
         `spc:${script.spawnColor || ""}`,
         `spn:${clampInt(script.spawnCount ?? 1, 1, 10, 1)}`,
@@ -1905,7 +2028,7 @@ function decodeConfigCode(raw) {
     countsValue.split(",").forEach((entry) => {
       const [color, value] = entry.split(":");
       if (!COLORS.some((item) => item.value === color)) return;
-      state.resetCounts[color] = clampInt(value, 0, 100, state.resetCounts[color] || 0);
+      state.resetCounts[color] = clampInt(value, 0, 1000, state.resetCounts[color] || 0);
     });
   }
 
@@ -1913,6 +2036,9 @@ function decodeConfigCode(raw) {
   if (optionsValue) {
     optionsValue.split(",").forEach((entry) => {
       const [option, value] = entry.split(":");
+      if (option === "worldSize") {
+        setWorldSize(value);
+      }
       if (option === "multiSurround") {
         state.multiSurround = value === "1";
         refs.multiSurroundToggle.checked = state.multiSurround;
@@ -1948,7 +2074,7 @@ function decodeConfigCode(raw) {
       const value = rest.join(":");
       if (key === "src" && COLORS.some((item) => item.value === value)) script.sourceColor = value;
       if (key === "act" && ACTION_OPTIONS.some((item) => item.value === value)) script.action = value;
-      if (key === "str" && STRENGTH_OPTIONS.some((item) => item.value === value)) script.strength = value;
+      if (key === "str" && value !== "") script.strength = clampStrength(value);
       if (key === "tgt" && COLORS.some((item) => item.value === value)) script.targetColor = value;
       if (key === "spc" && COLORS.some((item) => item.value === value)) script.spawnColor = value;
       if (key === "spn") script.spawnCount = clampInt(value, 1, 10, 1);
@@ -1964,6 +2090,9 @@ function decodeConfigCode(raw) {
             if (conditionKey === "not") condition.negated = conditionValue === "1";
             if (conditionKey === "type" && CONDITION_TYPE_OPTIONS.some((item) => item.value === conditionValue)) {
               condition.type = conditionValue;
+            }
+            if (conditionKey === "num" && conditionValue !== "") {
+              condition.number = clampInt(conditionValue, 1, IO_COUNT, 1);
             }
             if (conditionKey === "color" && COLORS.some((item) => item.value === conditionValue)) {
               condition.color = conditionValue;
@@ -1986,26 +2115,67 @@ function createCondition() {
     operator: "and",
     negated: false,
     type: "buttonPressed",
+    number: 1,
     primaryColor: "red",
     secondaryColor: "green",
     cooldownSeconds: 0,
   };
 }
 
-function bindScriptSignalButton() {
-  const setPressed = (pressed) => {
-    state.scriptButtonPressed = pressed;
-    refs.scriptSignalBtn.classList.toggle("is-pressed", pressed);
-  };
+function renderButtonInputs() {
+  if (!refs.buttonInputsList) return;
+  refs.buttonInputsList.innerHTML = "";
+  const releaseHandlers = [];
 
-  refs.scriptSignalBtn.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    setPressed(true);
-  });
-  refs.scriptSignalBtn.addEventListener("pointerup", () => setPressed(false));
-  refs.scriptSignalBtn.addEventListener("pointerleave", () => setPressed(false));
-  refs.scriptSignalBtn.addEventListener("pointercancel", () => setPressed(false));
-  window.addEventListener("pointerup", () => setPressed(false));
+  for (let number = 1; number <= IO_COUNT; number += 1) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "button ghost io-button-chip";
+    btn.textContent = String(number);
+    btn.setAttribute("aria-label", `Button ${number}`);
+
+    const setPressed = (pressed) => {
+      state.buttons[number] = pressed;
+      btn.classList.toggle("is-pressed", pressed);
+    };
+
+    btn.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      setPressed(true);
+    });
+    btn.addEventListener("pointerup", () => setPressed(false));
+    btn.addEventListener("pointerleave", () => setPressed(false));
+    btn.addEventListener("pointercancel", () => setPressed(false));
+    releaseHandlers.push(setPressed);
+
+    refs.buttonInputsList.appendChild(btn);
+  }
+
+  // Releasing the pointer anywhere on the page lets go of any held button.
+  window.addEventListener("pointerup", () => releaseHandlers.forEach((release) => release(false)));
+}
+
+function renderSwitchInputs() {
+  if (!refs.switchInputsList) return;
+  refs.switchInputsList.innerHTML = "";
+
+  for (let number = 1; number <= IO_COUNT; number += 1) {
+    const label = document.createElement("label");
+    label.className = "possession-toggle io-switch-chip";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(state.switches[number]);
+    input.addEventListener("change", (event) => {
+      state.switches[number] = event.target.checked;
+    });
+
+    const span = document.createElement("span");
+    span.textContent = `Switch ${number}`;
+
+    label.append(input, span);
+    refs.switchInputsList.appendChild(label);
+  }
 }
 
 function evaluateScriptConditions(script, source) {
@@ -2025,7 +2195,13 @@ function evaluateCondition(condition, source) {
   let value = false;
 
   if (condition.type === "buttonPressed") {
-    value = state.scriptButtonPressed;
+    value = Boolean(state.buttons[condition.number || 1]);
+  } else if (condition.type === "buttonReleased") {
+    value = !state.buttons[condition.number || 1];
+  } else if (condition.type === "switchOn") {
+    value = Boolean(state.switches[condition.number || 1]);
+  } else if (condition.type === "switchOff") {
+    value = !state.switches[condition.number || 1];
   } else if (condition.type === "nearColor") {
     const targets = state.particles.filter(
       (particle) => particle.color === condition.color && particle.id !== source.id
@@ -2098,7 +2274,7 @@ function applyEatActions() {
       const nearby = findNearestTargetsInRange(source, targets, EAT_RADIUS, 1)[0];
       if (!nearby) return;
       eatenIds.add(nearby.target.id);
-      source.eatCooldown = 0.45 / getStrengthMultiplier(script.strength);
+      source.eatCooldown = 0.45 / getStrengthCooldownMultiplier(script);
     });
   });
 
@@ -2150,11 +2326,11 @@ function applySpawnActions() {
           vx: source.vx + Math.cos(copyAngle) * 0.08,
           vy: source.vy + Math.sin(copyAngle) * 0.08,
           heading: source.heading,
-          spawnCooldown: 1.2 / getStrengthMultiplier(script.strength),
+          spawnCooldown: 1.2 / getStrengthCooldownMultiplier(script),
           eatCooldown: 0,
         });
       }
-      source.spawnCooldown = 1.4 / getStrengthMultiplier(script.strength);
+      source.spawnCooldown = 1.4 / getStrengthCooldownMultiplier(script);
     });
   });
 
@@ -2258,23 +2434,6 @@ function applyGlobalRepulsion(forces) {
       addForce(forces, b.id, offset.dx / distance, offset.dy / distance, strength * 1.8);
     }
   }
-}
-
-function getInteractionCurve(distance) {
-  const normalized = distance / INTERACTION_RANGE;
-  const peak = 0.42;
-  if (normalized >= 1) return 0;
-  if (normalized < peak) {
-    return normalized / peak;
-  }
-  return (1 - normalized) / (1 - peak);
-}
-
-function getRepelInteractionCurve(distance) {
-  const normalized = distance / INTERACTION_RANGE;
-  if (normalized >= 1) return 0;
-  const closeness = 1 - normalized;
-  return closeness * closeness;
 }
 
 function addForce(forces, particleId, nx, ny, magnitude) {
